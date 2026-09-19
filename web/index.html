@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lagman House Menu</title>
+  <link rel="icon" href="./favicon.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="top">
+    <img src="./logo.png" alt="Lagman House" class="logo" />
+    <div>
+      <h1 id="restaurantName">Lagman House</h1>
+      <p id="tableLabel" class="muted"></p>
+    </div>
+    <button id="langBtn" class="ghost" type="button">اردو</button>
+  </header>
+
+  <main>
+    <section id="status" class="status hidden"></section>
+    <nav id="categories" class="chips"></nav>
+    <section id="menu" class="grid"></section>
+    <p id="empty" class="muted hidden" data-i18n="empty">The menu is not available right now.</p>
+  </main>
+
+  <footer id="cartBar" class="cartbar hidden">
+    <div>
+      <strong id="cartCount">0</strong> <span data-i18n="items">items</span>
+      <div id="cartTotal" class="total"></div>
+    </div>
+    <button id="reviewBtn" class="primary" type="button" data-i18n="review">Review order</button>
+  </footer>
+
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 data-i18n="yourOrder">Your order</h2>
+        <button id="closeSheet" class="ghost" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="cartLines"></div>
+      <label class="field">
+        <span data-i18n="name">Your name (optional)</span>
+        <input id="customerName" maxlength="40" />
+      </label>
+      <label class="field">
+        <span data-i18n="note">Note for the kitchen (optional)</span>
+        <input id="note" maxlength="120" />
+      </label>
+      <div class="sheet-total"><span data-i18n="total">Total</span><strong id="sheetTotal"></strong></div>
+      <button id="submitBtn" class="primary wide" type="button" data-i18n="send">Send to cashier</button>
+      <p class="muted small" data-i18n="disclaimer">A cashier will confirm your order and take payment at the counter.</p>
+    </div>
+  </div>
+
+  <div id="done" class="done hidden">
+    <h2 data-i18n="sent">Order sent</h2>
+    <p data-i18n="sentBody">Please wait for the cashier to confirm your order.</p>
+    <p id="doneStatus" class="muted"></p>
+    <button id="againBtn" class="ghost" type="button" data-i18n="again">Start a new order</button>
+  </div>
+
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -39,3 +39,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# env
+.env
+.env.*
+!.env.example
+
+# owner reference material
+IMAGES/

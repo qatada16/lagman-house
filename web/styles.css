@@ -1,0 +1,64 @@
+:root {
+  --bg: #FFF9EC;
+  --surface: #FDF6E3;
+  --dark: #00243E;
+  --action: #B16217;
+  --highlight: #D8B27A;
+  --muted: #4F4E4A;
+  --border: #E9DDC4;
+  --white: #FFFFFF;
+  --danger: #9E2A2B;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: #1F1E1B; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body.rtl { direction: rtl; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+h1 { font-size: 20px; margin: 0; color: var(--dark); }
+h2 { font-size: 18px; margin: 0; color: var(--dark); }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--dark); padding: 10px 16px; background: var(--white); color: var(--dark); }
+button.primary { background: var(--action); border-color: var(--action); color: var(--white); font-weight: 600; }
+button.ghost { border-color: transparent; background: transparent; }
+button.wide { width: 100%; }
+button:disabled { opacity: .5; cursor: default; }
+
+.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; }
+.top > div { flex: 1; }
+.logo { width: 48px; height: 48px; }
+main { padding: 12px 16px 120px; max-width: 900px; margin: 0 auto; }
+.status { padding: 10px 12px; border-radius: 8px; background: var(--highlight); color: var(--dark); margin-bottom: 12px; }
+.status.error { background: #F4E1E1; color: var(--danger); }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; }
+.chips button { white-space: nowrap; padding: 6px 12px; font-size: 13px; }
+.chips button.active { background: var(--dark); color: var(--white); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.card { background: var(--white); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.card img, .card .ph { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--highlight); font-size: 28px; font-weight: 700; }
+.card .body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.card .name { font-weight: 600; }
+.card .desc { font-size: 12px; color: var(--muted); }
+.card .price { color: var(--action); font-weight: 600; font-size: 14px; }
+.card .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+.card select { font: inherit; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); max-width: 100%; }
+.card .add { padding: 6px 12px; font-size: 13px; }
+
+.cartbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--dark); color: var(--white); z-index: 3; }
+.cartbar .total { font-size: 18px; font-weight: 700; }
+.cartbar button { border-color: var(--action); }
+
+.sheet { position: fixed; inset: 0; background: rgba(31,30,27,.45); display: flex; align-items: flex-end; z-index: 4; }
+.sheet-inner { background: var(--bg); width: 100%; max-height: 90vh; overflow-y: auto; border-radius: 12px 12px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; }
+.line { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.line .info { flex: 1; }
+.line .sub { font-size: 12px; color: var(--muted); }
+.qty { display: flex; align-items: center; gap: 6px; }
+.qty button { width: 30px; height: 30px; padding: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.field input { font: 15px system-ui, sans-serif; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--white); text-transform: none; }
+.sheet-total { display: flex; justify-content: space-between; font-size: 18px; }
+
+.done { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; z-index: 5; }

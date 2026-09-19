@@ -12,7 +12,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://klnsekmdkadwqnrlumww.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4",
+        "EXPO_PUBLIC_PUBLIC_MENU_URL": "https://lagman-house-menu.vercel.app/"
       }
     },
     "preview": {
@@ -22,7 +23,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://klnsekmdkadwqnrlumww.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4",
+        "EXPO_PUBLIC_PUBLIC_MENU_URL": "https://lagman-house-menu.vercel.app/"
       }
     },
     "production": {
@@ -32,7 +34,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://klnsekmdkadwqnrlumww.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4",
+        "EXPO_PUBLIC_PUBLIC_MENU_URL": "https://lagman-house-menu.vercel.app/"
       }
     }
   },

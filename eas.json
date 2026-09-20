@@ -29,13 +29,21 @@
     },
     "production": {
       "autoIncrement": true,
+      "distribution": "internal",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://klnsekmdkadwqnrlumww.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_mbT4tWpvEkpRGboL_NCtGg_edfQqNw4",
         "EXPO_PUBLIC_PUBLIC_MENU_URL": "https://lagman-house-menu.vercel.app/"
+      }
+    },
+    "production-aab": {
+      "extends": "production",
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },

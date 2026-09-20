@@ -26,21 +26,47 @@ web/                 static public menu page (QR ordering)
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill in the Supabase URL, publishable key and hosted menu URL.
-2. Run `supabase/schema.sql` in the Supabase SQL Editor (see the report handed over with the build).
-3. `npm install`
-4. Build a development client (native Bluetooth module, so Expo Go cannot be used):
+   The same three values live in each `eas.json` build profile's `env` block, which is what cloud builds use.
+2. Run `supabase/schema.sql` in the Supabase SQL Editor.
+3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
+   Email verification uses Supabase's default confirmation link, which deep-links back into the app.
+4. `npm install`
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm start` | Start the Metro dev server for a development-client build |
+| `npm run typecheck` | TypeScript check (`tsc --noEmit`) |
+| `npm run lint` | ESLint via `expo lint` |
+| `npm run build:dev` | EAS cloud build: development client APK (needs `npm start` running to load JS) |
+| `npm run build:preview` | EAS cloud build: standalone test APK, version not incremented |
+| `npm run build:prod` | EAS cloud build: signed release APK, `versionCode` auto-incremented |
+| `npm run build:aab` | EAS cloud build: release `.aab` for Google Play |
+| `npm run build:local` | Release APK built on this machine (requires Android SDK and Java) |
+
+Expo Go cannot run this app because of the native Bluetooth module; always use one of the builds above.
+
+### First-time build
+
+`build:dev` asks whether to generate an Android keystore. Answer yes; EAS stores it in your Expo account and
+reuses it for every profile. When a build finishes, the EAS page shows a QR code and an Install button for the APK.
+
+### Development workflow
 
 ```
-npm run build:dev          # eas build --profile development --platform android
+npm run build:dev     # once, or whenever native dependencies change
+npm start             # every session; open the installed dev client and connect
 ```
 
-Install the APK on the device, then:
+### Shipping
 
 ```
-npm start                  # expo start --dev-client
+npm run build:prod    # release APK to install directly on the restaurant devices
+npm run build:aab     # only if publishing through Google Play
 ```
 
-Other scripts: `npm run typecheck`, `npm run build:preview` (installable APK without dev client).
+Uninstall the development client before installing a release APK; both use the package `com.lagmanhouse.pos`.
 
 ## Public menu
 

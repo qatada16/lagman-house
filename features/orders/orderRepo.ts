@@ -13,6 +13,7 @@ export interface OrderWithMeta extends Order {
 
 const toOrder = (r: OrderRow & { cashier_name?: string | null }): OrderWithMeta => ({
   ...r,
+  admin_id: r.admin_id ?? null,
   is_test: !!r.is_test,
   stock_deducted: !!r.stock_deducted,
   is_dirty: !!r.is_dirty,
@@ -22,6 +23,7 @@ export interface CreateOrderInput {
   id?: string;
   orderNumber?: string;
   cashierId: string;
+  adminId: string | null;
   lines: CartLine[];
   note: string | null;
   isTest: boolean;
@@ -41,6 +43,7 @@ export function createOrder(input: CreateOrderInput): { order: Order; items: Ord
     id,
     order_number: orderNumber,
     cashier_id: input.cashierId,
+    admin_id: input.adminId,
     status: 'completed',
     source: input.source,
     customer_order_id: input.customerOrderId ?? null,
@@ -95,6 +98,7 @@ export function getOrderItems(orderId: string): OrderItem[] {
 
 export interface OrderFilter {
   cashierId?: string | null;
+  adminId?: string | null;
   from: Date;
   to: Date;
   includeTest?: boolean;
@@ -106,6 +110,10 @@ function whereFor(f: OrderFilter) {
   if (f.cashierId) {
     clauses.push('o.cashier_id = ?');
     params.push(f.cashierId);
+  }
+  if (f.adminId) {
+    clauses.push('(o.admin_id = ? OR o.admin_id IS NULL)');
+    params.push(f.adminId);
   }
   if (!f.includeTest) clauses.push('o.is_test = 0');
   return { where: clauses.join(' AND '), params };
@@ -120,6 +128,17 @@ export function listOrders(f: OrderFilter, limit = 200): OrderWithMeta[] {
   ).map(toOrder);
 }
 
+export function listOrdersWithCounts(f: OrderFilter, limit = 1000): (OrderWithMeta & { item_count: number })[] {
+  const { where, params } = whereFor(f);
+  return all<OrderRow & { cashier_name: string | null; item_count: number }>(
+    `SELECT o.*, p.name AS cashier_name,
+            (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
+     FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
+     WHERE ${where} ORDER BY o.created_at DESC LIMIT ?`,
+    [...params, limit]
+  ).map((r) => ({ ...toOrder(r), item_count: r.item_count }));
+}
+
 export interface Analytics {
   revenue: number;
   count: number;
@@ -129,10 +148,7 @@ export interface Analytics {
 
 export function analytics(f: OrderFilter): Analytics {
   const { where, params } = whereFor(f);
-  const totals = get<{ revenue: number | null; count: number }>(
-    `SELECT SUM(o.total) AS revenue, COUNT(*) AS count FROM orders o WHERE ${where}`,
-    params
-  );
+  const totals = get<{ revenue: number | null; count: number }>(`SELECT SUM(o.total) AS revenue, COUNT(*) AS count FROM orders o WHERE ${where}`, params);
   const topItems = all<{ name: string; quantity: number; revenue: number }>(
     `SELECT CASE WHEN oi.variant_name IS NULL THEN oi.item_name ELSE oi.item_name || ' (' || oi.variant_name || ')' END AS name,
             SUM(oi.quantity) AS quantity, SUM(oi.line_total) AS revenue
@@ -144,6 +160,21 @@ export function analytics(f: OrderFilter): Analytics {
   const revenue = totals?.revenue ?? 0;
   const count = totals?.count ?? 0;
   return { revenue, count, average: count ? revenue / count : 0, topItems };
+}
+
+export interface DayBucket {
+  day: string;
+  revenue: number;
+  count: number;
+}
+
+export function ordersByDay(f: OrderFilter): DayBucket[] {
+  const { where, params } = whereFor(f);
+  return all<DayBucket>(
+    `SELECT substr(o.created_at, 1, 10) AS day, SUM(o.total) AS revenue, COUNT(*) AS count
+     FROM orders o WHERE ${where} GROUP BY day ORDER BY day`,
+    params
+  );
 }
 
 export function countUnsyncedOrders() {

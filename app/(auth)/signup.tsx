@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthFrame } from '@/components/AuthFrame';
 import { Avatar } from '@/components/Indicators';
-import { AppText, Button, Input } from '@/components/ui';
+import { AppText, Button, Input, Select } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, radius, spacing } from '@/constants/theme';
-import { signUp, validateEmail, validatePassword } from '@/features/auth/authApi';
+import { listAdmins, signUp, validateEmail, validatePassword } from '@/features/auth/authApi';
 import { useAuthStore } from '@/store/authStore';
 import { useLanguageStore } from '@/store/languageStore';
-import type { Role } from '@/lib/types';
+import type { AdminSummary, Role } from '@/lib/types';
 
 export default function SignupScreen() {
   const t = useT();
@@ -22,9 +22,20 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [role, setRole] = useState<Role>('cashier');
+  const [adminId, setAdminId] = useState<string | null>(null);
+  const [admins, setAdmins] = useState<AdminSummary[] | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    listAdmins()
+      .then((list) => {
+        setAdmins(list);
+        if (list.length === 1) setAdminId(list[0].id);
+      })
+      .catch(() => setAdmins([]));
+  }, []);
 
   const pickPhoto = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
@@ -37,11 +48,12 @@ export default function SignupScreen() {
     if (!validateEmail(email)) next.email = t('invalidEmail');
     if (!validatePassword(password)) next.password = t('passwordRules');
     if (password !== confirm) next.confirm = t('passwordMismatch');
+    if (role === 'cashier' && !adminId) next.admin = t('fieldRequired');
     setErrors(next);
     if (Object.keys(next).length) return;
     setLoading(true);
     try {
-      await signUp({ name, email, password, role, language: lang });
+      await signUp({ name, email, password, role, language: lang, adminId });
       useAuthStore.getState().setPendingPhoto(photo);
       useAuthStore.getState().setPendingCredentials({ email: email.trim().toLowerCase(), password });
       router.push({ pathname: '/(auth)/verify-email', params: { email: email.trim().toLowerCase() } });
@@ -90,12 +102,31 @@ export default function SignupScreen() {
         })}
       </View>
 
+      {role === 'cashier' ? (
+        admins && admins.length === 0 ? (
+          <AppText variant="small" color={colors.danger}>
+            {t('noAdminsYet')}
+          </AppText>
+        ) : (
+          <Select
+            label={t('selectAdmin')}
+            value={adminId}
+            options={(admins ?? []).map((a) => ({ value: a.id, label: a.name }))}
+            onChange={setAdminId}
+            placeholder={admins ? t('selectAdmin') : t('loading')}
+            searchable={(admins?.length ?? 0) > 6}
+            error={errors.admin}
+          />
+        )
+      ) : null}
+      {role === 'cashier' ? <AppText variant="small">{t('selectAdminHint')}</AppText> : null}
+
       {errors.form ? (
         <AppText variant="small" color={colors.danger}>
           {errors.form}
         </AppText>
       ) : null}
-      <Button title={t('createAccount')} onPress={submit} loading={loading} size="lg" />
+      <Button title={t('createAccount')} onPress={submit} loading={loading} size="lg" disabled={role === 'cashier' && admins?.length === 0} />
       <View style={[row, { gap: spacing.xs, justifyContent: 'center', marginTop: spacing.sm }]}>
         <AppText variant="small">{t('haveAccount')}</AppText>
         <Link href="/(auth)/login" asChild>

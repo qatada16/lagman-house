@@ -43,6 +43,7 @@ export default function CartReviewScreen() {
       id: draft.id,
       orderNumber: draft.orderNumber,
       cashierId: profile.id,
+      adminId: profile.admin_id,
       lines: cart.lines,
       note: cart.note,
       isTest: cart.isTest,

@@ -72,6 +72,7 @@ export default function TemplateEditScreen() {
 
   return (
     <Screen
+      safeTop={false}
       title={isNew ? t('newTemplate') : t('editTemplate')}
       actions={<IconButton icon="x" onPress={() => router.back()} />}
       footer={
@@ -89,6 +90,22 @@ export default function TemplateEditScreen() {
             <View style={{ height: spacing.sm }} />
             <Toggle label={t('templateActive')} value={isActive} onChange={setIsActive} />
             <Segmented label={t('paperWidth')} value={String(cfg.paperWidthMm)} onChange={(v) => setCfg((c) => ({ ...c, paperWidthMm: v === '80' ? 80 : 58 }))} options={[{ value: '58', label: '58 mm' }, { value: '80', label: '80 mm' }]} />
+          </Card>
+
+          <Card title={t('sectionStyle')}>
+            <Select
+              label={t('printerFont')}
+              value={cfg.style.font}
+              onChange={(v) => patch('style', { font: v })}
+              options={[
+                { value: 'A', label: t('fontA') },
+                { value: 'B', label: t('fontB') },
+              ]}
+            />
+            <Toggle label={t('boldHeader')} value={cfg.style.boldHeader} onChange={(v) => patch('style', { boldHeader: v })} />
+            <Toggle label={t('boldItems')} value={cfg.style.boldItems} onChange={(v) => patch('style', { boldItems: v })} />
+            <Toggle label={t('boldTotals')} value={cfg.style.boldTotals} onChange={(v) => patch('style', { boldTotals: v })} />
+            <Toggle label={t('boldFooter')} value={cfg.style.boldFooter} onChange={(v) => patch('style', { boldFooter: v })} />
           </Card>
 
           <Card title={t('sectionHeader')}>

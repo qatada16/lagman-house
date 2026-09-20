@@ -118,6 +118,7 @@ export default function MenuItemEditScreen() {
 
   return (
     <Screen
+      safeTop={false}
       title={isNew ? t('newItem') : t('editItem')}
       actions={<IconButton icon="x" onPress={() => router.back()} />}
       footer={

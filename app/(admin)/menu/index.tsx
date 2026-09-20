@@ -40,6 +40,7 @@ export default function MenuAdminScreen() {
 
   return (
     <Screen
+      safeTop={false}
       title={t('menuTitle')}
       actions={
         <View style={[row, { gap: spacing.sm }]}>

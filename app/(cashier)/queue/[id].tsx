@@ -104,6 +104,7 @@ export default function ClaimedOrderScreen() {
         id: draft.id,
         orderNumber: draft.orderNumber,
         cashierId: profile.id,
+        adminId: profile.admin_id,
         lines: cart.lines,
         note: cart.note,
         isTest: false,

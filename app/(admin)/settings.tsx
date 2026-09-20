@@ -21,9 +21,11 @@ export default function AdminSettingsScreen() {
   };
 
   return (
-    <Screen title={t('settingsTitle')}>
+    <Screen safeTop={false} title={t('settingsTitle')}>
       <Card title={t('restaurantName')}>
         <Input label={t('restaurantName')} value={settings.restaurant_name} onChangeText={(v) => setSettings((s) => ({ ...s, restaurant_name: v }))} />
+        <View style={{ height: spacing.sm }} />
+        <Input label={t('restaurantNameUr')} value={settings.restaurant_name_ur} onChangeText={(v) => setSettings((s) => ({ ...s, restaurant_name_ur: v }))} />
         <View style={{ height: spacing.sm }} />
         <Input label={t('restaurantAddress')} value={settings.restaurant_address} onChangeText={(v) => setSettings((s) => ({ ...s, restaurant_address: v }))} multiline />
         <View style={{ height: spacing.sm }} />

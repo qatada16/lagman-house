@@ -16,7 +16,7 @@ export function useDraftOrder(): Draft {
 export function draftToOrder(
   draft: Draft,
   lines: CartLine[],
-  opts: { cashierId: string | null; note: string; isTest: boolean; amountReceived: string; paymentMethod: PaymentMethod; source: 'pos' | 'qr'; tableCode?: string | null; customerOrderId?: string | null }
+  opts: { cashierId: string | null; adminId?: string | null; note: string; isTest: boolean; amountReceived: string; paymentMethod: PaymentMethod; source: 'pos' | 'qr'; tableCode?: string | null; customerOrderId?: string | null }
 ): { order: Order; items: OrderItem[] } {
   const now = new Date().toISOString();
   const subtotal = Math.round(lines.reduce((s, l) => s + l.unit_price * l.quantity, 0) * 100) / 100;
@@ -25,6 +25,7 @@ export function draftToOrder(
     id: draft.id,
     order_number: draft.orderNumber,
     cashier_id: opts.cashierId,
+    admin_id: opts.adminId ?? null,
     status: 'completed',
     source: opts.source,
     customer_order_id: opts.customerOrderId ?? null,

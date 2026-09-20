@@ -5,6 +5,7 @@ import { requestSync } from '@/features/sync/syncEngine';
 
 export const DEFAULT_TEMPLATE_CONFIG: ReceiptTemplateConfig = {
   paperWidthMm: 58,
+  style: { font: 'A', boldHeader: true, boldItems: false, boldTotals: true, boldFooter: false },
   header: { showName: true, showLogo: false, position: 'top', align: 'center', extraLines: [] },
   dateTime: { show: true, position: 'top', format: 'datetime' },
   orderNumber: { show: true, label: 'Order', prefix: '#', format: 'sequence' },
@@ -28,6 +29,7 @@ export function normalizeConfig(raw: unknown): ReceiptTemplateConfig {
   const d = DEFAULT_TEMPLATE_CONFIG;
   return {
     paperWidthMm: c.paperWidthMm === 80 ? 80 : 58,
+    style: { ...d.style, ...(c.style ?? {}) },
     header: { ...d.header, ...(c.header ?? {}) , extraLines: c.header?.extraLines ?? [] },
     dateTime: { ...d.dateTime, ...(c.dateTime ?? {}) },
     orderNumber: { ...d.orderNumber, ...(c.orderNumber ?? {}) },

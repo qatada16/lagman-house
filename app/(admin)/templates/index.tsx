@@ -11,7 +11,7 @@ export default function TemplatesScreen() {
   const [templates] = useLocalQuery(() => listTemplates());
 
   return (
-    <Screen title={t('templatesTitle')} subtitle={t('templatesHint')} actions={<Button title={t('newTemplate')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/templates/new')} />}>
+    <Screen safeTop={false} title={t('templatesTitle')} subtitle={t('templatesHint')} actions={<Button title={t('newTemplate')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/templates/new')} />}>
       <Card padded={false}>
         {templates.length === 0 ? (
           <EmptyState title={t('noTemplates')} icon="file-text" />

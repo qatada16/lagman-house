@@ -52,6 +52,7 @@ export default function StockEditScreen() {
 
   return (
     <Screen
+      safeTop={false}
       title={isNew ? t('addStock') : t('editStock')}
       actions={<IconButton icon="x" onPress={() => router.back()} />}
       footer={

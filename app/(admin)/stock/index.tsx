@@ -11,7 +11,7 @@ export default function StockScreen() {
   const [items] = useLocalQuery(() => listStockItems().map((s) => ({ ...s, usedBy: stockUsageCount(s.id) })));
 
   return (
-    <Screen title={t('stockTitle')} actions={<Button title={t('addStock')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/stock/new')} />}>
+    <Screen safeTop={false} title={t('stockTitle')} actions={<Button title={t('addStock')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/stock/new')} />}>
       <Card padded={false}>
         {items.length === 0 ? (
           <EmptyState title={t('noStock')} icon="package" />

@@ -11,6 +11,7 @@ import { useLanguageStore } from '@/store/languageStore';
 import { useAuthGate } from '@/features/auth/useAuthGate';
 import { useAppServices } from '@/features/app/useAppServices';
 import { ToastHost } from '@/components/ui';
+import { ConfirmHost } from '@/components/ui/ConfirmHost';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -54,6 +55,7 @@ export default function RootLayout() {
             <Stack.Screen name="phone/verify" options={{ presentation: 'card' }} />
           </Stack>
           <ToastHost />
+          <ConfirmHost />
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/storage';
-import type { Language, Role } from '@/lib/types';
+import type { AdminSummary, Language, Role } from '@/lib/types';
 import { useAuthStore } from '@/store/authStore';
 import { cacheProfile } from './profileRepo';
 
@@ -19,11 +19,25 @@ export function toE164(dialCode: string, digits: string) {
   return `+${dialCode.replace(/\D/g, '')}${digits.replace(/\D/g, '')}`;
 }
 
-export async function signUp(input: { name: string; email: string; password: string; role: Role; language: Language }) {
+export async function listAdmins(): Promise<AdminSummary[]> {
+  const { data, error } = await supabase.rpc('list_admins');
+  if (error) throw error;
+  return (data ?? []) as AdminSummary[];
+}
+
+export async function deleteOwnAccount() {
+  const { error } = await supabase.rpc('delete_own_account');
+  if (error) throw error;
+}
+
+export async function signUp(input: { name: string; email: string; password: string; role: Role; language: Language; adminId: string | null }) {
   const { data, error } = await supabase.auth.signUp({
     email: input.email.trim().toLowerCase(),
     password: input.password,
-    options: { emailRedirectTo: EMAIL_REDIRECT, data: { name: input.name.trim(), role: input.role, language: input.language } },
+    options: {
+      emailRedirectTo: EMAIL_REDIRECT,
+      data: { name: input.name.trim(), role: input.role, language: input.language, admin_id: input.role === 'cashier' ? input.adminId : null },
+    },
   });
   if (error) throw error;
   return data;

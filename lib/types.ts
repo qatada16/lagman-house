@@ -14,8 +14,15 @@ export interface Profile {
   status: AccountStatus;
   push_token: string | null;
   language: Language;
+  admin_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminSummary {
+  id: string;
+  name: string;
+  photo_url: string | null;
 }
 
 export interface Category {
@@ -91,8 +98,17 @@ export interface QrTable {
 export type ReceiptAlign = 'left' | 'center' | 'right';
 export type ReceiptPosition = 'top' | 'bottom';
 
+export interface ReceiptStyle {
+  font: 'A' | 'B';
+  boldHeader: boolean;
+  boldItems: boolean;
+  boldTotals: boolean;
+  boldFooter: boolean;
+}
+
 export interface ReceiptTemplateConfig {
   paperWidthMm: 58 | 80;
+  style: ReceiptStyle;
   header: {
     showName: boolean;
     showLogo: boolean;
@@ -133,6 +149,7 @@ export interface Order {
   id: string;
   order_number: string;
   cashier_id: string | null;
+  admin_id: string | null;
   status: 'completed' | 'void';
   source: 'pos' | 'qr';
   customer_order_id: string | null;
@@ -199,6 +216,7 @@ export interface CartLine {
 
 export interface RestaurantSettings {
   restaurant_name: string;
+  restaurant_name_ur: string;
   restaurant_address: string;
   currency_symbol: string;
   logo_url: string;

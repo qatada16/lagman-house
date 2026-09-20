@@ -9,6 +9,7 @@ import { listCashiers, setCashierStatusLocal } from '@/features/auth/profileRepo
 import { formatDate } from '@/lib/format';
 import { confirm } from '@/lib/confirm';
 import { toast } from '@/store/toastStore';
+import { useAuthStore } from '@/store/authStore';
 import type { AccountStatus, Profile } from '@/lib/types';
 
 type Filter = 'all' | 'pending' | 'active' | 'suspended';
@@ -16,21 +17,23 @@ type Filter = 'all' | 'pending' | 'active' | 'suspended';
 export default function CashiersScreen() {
   const t = useT();
   const { row } = useLayout();
+  const profile = useAuthStore((s) => s.profile);
   const [filter, setFilter] = useState<Filter>('all');
-  const [cashiers, refresh] = useLocalQuery(listCashiers);
+  const [cashiers, refresh] = useLocalQuery(() => listCashiers(profile?.id ?? null), [profile?.id]);
 
   const visible = cashiers.filter((c) => filter === 'all' || c.status === filter || (filter === 'suspended' && c.status === 'rejected'));
 
   const change = async (c: Profile, status: AccountStatus, key: 'approveConfirm' | 'rejectConfirm' | 'suspendConfirm' | 'reactivateConfirm') => {
-    const destructive = status !== 'active';
-    if (!(await confirm(t(key === 'approveConfirm' ? 'approve' : key === 'rejectConfirm' ? 'reject' : key === 'suspendConfirm' ? 'suspend' : 'reactivate'), t(key, { name: c.name }), t('confirm'), t('cancel'), destructive))) return;
-    setCashierStatusLocal(c.id, status);
+    if (!profile) return;
+    const title = key === 'approveConfirm' ? 'approve' : key === 'rejectConfirm' ? 'reject' : key === 'suspendConfirm' ? 'suspend' : 'reactivate';
+    if (!(await confirm(t(title), t(key, { name: c.name }), t('confirm'), t('cancel'), status !== 'active'))) return;
+    setCashierStatusLocal(c.id, status, profile.id);
     refresh();
     toast.success(t('statusUpdated'));
   };
 
   return (
-    <Screen title={t('cashiersTitle')}>
+    <Screen title={t('cashiersTitle')} safeTop={false}>
       <Segmented<Filter>
         value={filter}
         onChange={setFilter}
@@ -53,11 +56,14 @@ export default function CashiersScreen() {
               left={<Avatar uri={c.photo_url} name={c.name} size={40} />}
               right={
                 <View style={{ alignItems: 'flex-end', gap: spacing.sm }}>
-                  <Badge label={t(c.status)} tone={statusTone(c.status)} />
+                  <View style={[row, { gap: spacing.xs }]}>
+                    {!c.admin_id ? <Badge label={t('noAdminLinked')} tone="warning" /> : null}
+                    <Badge label={t(c.status)} tone={statusTone(c.status)} />
+                  </View>
                   <View style={[row, { gap: spacing.xs }]}>
                     {c.status === 'pending' ? (
                       <>
-                        <Button title={t('approve')} size="sm" variant="action" onPress={() => change(c, 'active', 'approveConfirm')} />
+                        <Button title={c.admin_id ? t('approve') : t('claimCashier')} size="sm" variant="action" onPress={() => change(c, 'active', 'approveConfirm')} />
                         <Button title={t('reject')} size="sm" variant="outline" onPress={() => change(c, 'rejected', 'rejectConfirm')} />
                       </>
                     ) : c.status === 'active' ? (

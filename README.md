@@ -27,10 +27,20 @@ web/                 static public menu page (QR ordering)
 
 1. Copy `.env.example` to `.env` and fill in the Supabase URL, publishable key and hosted menu URL.
    The same three values live in each `eas.json` build profile's `env` block, which is what cloud builds use.
-2. Run `supabase/schema.sql` in the Supabase SQL Editor.
+2. Run `supabase/schema.sql` in the Supabase SQL Editor, then every file in `supabase/migrations/` in numeric order.
+   Both are safe to re-run.
 3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
    Email verification uses Supabase's default confirmation link, which deep-links back into the app.
 4. `npm install`
+
+## Accounts
+
+- The first person to sign up should pick the Admin role. Cashiers choose their admin from a dropdown at
+  signup; only that admin is notified and can approve them, and only that admin sees their orders.
+- Several admins can coexist. Menu, stock and receipt templates are shared by all of them.
+- Anyone can delete their own account from Account -> Delete account. Orders are kept for the records.
+  If an admin deletes their account, their cashiers show as "No admin linked" and any admin can approve
+  and claim them.
 
 ## Scripts
 
@@ -71,7 +81,8 @@ Uninstall the development client before installing a release APK; both use the p
 ## Public menu
 
 `web/` is a static site. Host it anywhere (see `web/README.md`) and set `EXPO_PUBLIC_PUBLIC_MENU_URL`
-to its URL. The admin QR screen generates one QR per table pointing at `<URL>/?t=<TABLE_CODE>`.
+to its URL. The admin QR screen shows one QR code for the whole restaurant. Customers type their table
+number when they send an order; cashiers treat it as a hint.
 
 ## Key behaviours
 
@@ -81,5 +92,8 @@ to its URL. The admin QR screen generates one QR per table pointing at `<URL>/?t
   `deduct_stock_for_order(order_id)`, which is idempotent. Orders flagged `is_test` never touch stock.
 - Customer orders are claimed with `claim_customer_order(order_id, cashier_id)`, a single atomic UPDATE.
 - Receipts are rendered by one function (`features/receipts/render.ts`) from an order plus a template
-  config; the same function drives the printer and the on-screen preview.
+  config; the same function drives the printer and the on-screen preview. Templates choose printer font
+  A or B and which sections print bold.
+- History and analytics run on local SQLite data: card or sortable table view, revenue and order charts,
+  and CSV export through the Android share sheet.
 - Language switches instantly through a string dictionary and per-component RTL layout, not `I18nManager`.

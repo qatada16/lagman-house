@@ -172,9 +172,22 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 
 let initialized = false;
 
+const COLUMN_MIGRATIONS: [string, string, string][] = [
+  ['profiles', 'admin_id', 'TEXT'],
+  ['orders', 'admin_id', 'TEXT'],
+];
+
+function migrate() {
+  for (const [table, column, type] of COLUMN_MIGRATIONS) {
+    const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
+    if (!cols.some((c) => c.name === column)) db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 export function initDb() {
   if (initialized) return;
   db.execSync(SCHEMA);
+  migrate();
   initialized = true;
 }
 

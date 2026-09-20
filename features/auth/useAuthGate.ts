@@ -15,12 +15,13 @@ const SHARED_SEGMENTS = new Set(['phone']);
 export function useAuthGate() {
   const status = useAuthStore((s) => s.status);
   const profile = useAuthStore((s) => s.profile);
+  const resolving = useAuthStore((s) => s.resolving);
   const segments = useSegments();
   const router = useRouter();
   const navReady = !!useRootNavigationState()?.key;
 
   useEffect(() => {
-    if (status === 'loading' || !navReady) return;
+    if (status === 'loading' || resolving || !navReady) return;
     const area = areaFor(status, profile);
     const first = segments[0] as string | undefined;
     const inAuth = first === '(auth)' || first === 'auth';
@@ -40,5 +41,5 @@ export function useAuthGate() {
     if (inShared) return;
     if (area === 'admin' && !inAdmin) router.replace('/(admin)');
     if (area === 'cashier' && !inCashier) router.replace('/(cashier)');
-  }, [status, profile, segments, router, navReady]);
+  }, [status, profile, resolving, segments, router, navReady]);
 }

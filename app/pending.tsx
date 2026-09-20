@@ -10,6 +10,9 @@ import { colors, spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { confirm } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
+import { deleteOwnAccount, listAdmins } from '@/features/auth/authApi';
+import { toast } from '@/store/toastStore';
+import { useEffect, useState } from 'react';
 
 // Locked screen for cashiers who are not active. Only Account (read-only) and Logout are reachable.
 export default function PendingScreen() {
@@ -18,6 +21,11 @@ export default function PendingScreen() {
   const profile = useAuthStore((s) => s.profile);
   const signOut = useAuthStore((s) => s.signOut);
   const refresh = useAuthStore((s) => s.refreshProfile);
+  const [adminName, setAdminName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!profile?.admin_id) return;
+    listAdmins().then((list) => setAdminName(list.find((a) => a.id === profile.admin_id)?.name ?? null)).catch(() => undefined);
+  }, [profile?.admin_id]);
   if (!profile) return null;
 
   const copy =
@@ -29,6 +37,16 @@ export default function PendingScreen() {
 
   const logout = async () => {
     if (await confirm(t('logout'), t('logoutConfirm'), t('logout'), t('cancel'), true)) await signOut();
+  };
+
+  const deleteAccount = async () => {
+    if (!(await confirm(t('deleteAccount'), t('deleteAccountConfirm'), t('delete'), t('cancel'), true))) return;
+    try {
+      await deleteOwnAccount();
+      await signOut();
+    } catch (e) {
+      toast.error(`${t('deleteAccountFailed')}: ${(e as Error).message}`);
+    }
   };
 
   return (
@@ -47,6 +65,11 @@ export default function PendingScreen() {
         <AppText align="center" style={{ marginTop: spacing.sm }}>
           {copy.body}
         </AppText>
+        {profile.status === 'pending' && adminName ? (
+          <AppText align="center" variant="small" style={{ marginTop: spacing.xs }}>
+            {t('waitingForAdmin', { name: adminName })}
+          </AppText>
+        ) : null}
         <View style={{ alignItems: 'center', marginTop: spacing.md }}>
           <Badge label={t(profile.status)} tone={statusTone(profile.status)} />
         </View>
@@ -70,6 +93,7 @@ export default function PendingScreen() {
 
       <SyncIndicator />
       <Button title={t('logout')} variant="danger" icon="log-out" onPress={logout} />
+      <Button title={t('deleteAccount')} variant="ghost" icon="trash-2" onPress={deleteAccount} />
     </Screen>
   );
 }

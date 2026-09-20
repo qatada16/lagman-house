@@ -737,3 +737,5 @@ on conflict (id) do nothing;
 
 insert into public.qr_tables (code, label) values ('T1', 'Table 1'), ('T2', 'Table 2')
 on conflict (code) do nothing;
+
+-- After this file, run every file in supabase/migrations in numeric order.

@@ -2,8 +2,6 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const cfg = window.LAGMAN_CONFIG;
 const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-const params = new URLSearchParams(location.search);
-const tableCode = (params.get('t') || '').toUpperCase();
 
 const STR = {
   en: {
@@ -12,16 +10,15 @@ const STR = {
     sent: 'Order sent', sentBody: 'Please wait for the cashier to confirm your order.', again: 'Start a new order', empty: 'The menu is not available right now.',
     add: 'Add', all: 'All', table: 'Table', loading: 'Loading menu', failed: 'Could not load the menu. Check your connection.', sending: 'Sending',
     pending: 'Waiting for a cashier', claimed: 'A cashier is preparing your order', completed: 'Your order is confirmed', cancelled: 'This order was cancelled',
-    unknownTable: 'Unknown table code', currency: 'Rs',
+    tableField: 'Table number (optional)', currency: 'Rs',
   },
-  
   ur: {
     items: 'آئٹمز', review: 'آرڈر کا جائزہ', yourOrder: 'آپ کا آرڈر', name: 'آپ کا نام (اختیاری)', note: 'کچن کے لیے نوٹ (اختیاری)',
     total: 'کل', send: 'کیشیئر کو بھیجیں', disclaimer: 'کیشیئر آپ کے آرڈر کی تصدیق کرے گا اور کاؤنٹر پر ادائیگی لے گا۔',
     sent: 'آرڈر بھیج دیا گیا', sentBody: 'براہ کرم کیشیئر کی تصدیق کا انتظار کریں۔', again: 'نیا آرڈر شروع کریں', empty: 'مینو ابھی دستیاب نہیں۔',
     add: 'شامل کریں', all: 'سب', table: 'ٹیبل', loading: 'مینو لوڈ ہو رہا ہے', failed: 'مینو لوڈ نہیں ہو سکا۔ کنکشن چیک کریں۔', sending: 'بھیجا جا رہا ہے',
     pending: 'کیشیئر کا انتظار', claimed: 'کیشیئر آپ کا آرڈر تیار کر رہا ہے', completed: 'آپ کے آرڈر کی تصدیق ہو گئی', cancelled: 'یہ آرڈر منسوخ ہو گیا',
-    unknownTable: 'نامعلوم ٹیبل کوڈ', currency: 'Rs',
+    tableField: 'ٹیبل نمبر (اختیاری)', currency: 'Rs',
   },
 };
 
@@ -29,7 +26,7 @@ let lang = localStorage.getItem('lh.lang') === 'ur' ? 'ur' : 'en';
 let categories = [];
 let items = [];
 let variants = [];
-let settings = { restaurant_name: 'Lagman House', currency_symbol: 'Rs' };
+let settings = { restaurant_name: 'Lagman House', restaurant_name_ur: '', currency_symbol: 'Rs' };
 let activeCategory = 'all';
 const cart = new Map();
 
@@ -37,13 +34,15 @@ const $ = (id) => document.getElementById(id);
 const t = (k) => STR[lang][k] || STR.en[k] || k;
 const money = (v) => `${settings.currency_symbol} ${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 const name = (row) => (lang === 'ur' && row.name_ur ? row.name_ur : row.name);
+const restaurantName = () => (lang === 'ur' && settings.restaurant_name_ur ? settings.restaurant_name_ur : settings.restaurant_name);
 
 function applyLang() {
   document.body.classList.toggle('rtl', lang === 'ur');
   document.documentElement.lang = lang;
   $('langBtn').textContent = lang === 'ur' ? 'English' : 'اردو';
   document.querySelectorAll('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n)));
-  $('tableLabel').textContent = tableCode ? `${t('table')} ${tableCode}` : '';
+  $('restaurantName').textContent = restaurantName();
+  document.title = `${restaurantName()} Menu`;
   renderCategories();
   renderMenu();
   renderCart();
@@ -59,21 +58,20 @@ function showStatus(text, error = false) {
 async function load() {
   showStatus(t('loading'));
   try {
-    const [cat, mi, va, st, tbl] = await Promise.all([
+    const [cat, mi, va, st] = await Promise.all([
       supabase.from('categories').select('*').eq('is_active', true).is('deleted_at', null).order('sort_order'),
       supabase.from('menu_items').select('*').eq('is_active', true).is('deleted_at', null).order('sort_order'),
       supabase.from('menu_item_variants').select('*').is('deleted_at', null).order('sort_order'),
       supabase.from('settings').select('*'),
-      tableCode ? supabase.from('qr_tables').select('*').eq('code', tableCode).is('deleted_at', null).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     if (cat.error || mi.error || va.error) throw cat.error || mi.error || va.error;
     categories = cat.data || [];
     items = mi.data || [];
     variants = va.data || [];
     for (const row of st.data || []) if (typeof row.value === 'string') settings[row.key] = row.value;
-    $('restaurantName').textContent = settings.restaurant_name;
-    document.title = `${settings.restaurant_name} Menu`;
-    showStatus(tableCode && !tbl.data ? `${t('unknownTable')}: ${tableCode}` : '', !!(tableCode && !tbl.data));
+    $('restaurantName').textContent = restaurantName();
+    document.title = `${restaurantName()} Menu`;
+    showStatus('');
     $('empty').classList.toggle('hidden', items.length > 0);
     renderCategories();
     renderMenu();
@@ -167,7 +165,7 @@ async function submit() {
   btn.disabled = true;
   btn.textContent = t('sending');
   const payload = {
-    table_code: tableCode || null,
+    table_code: $('tableInput').value.trim().toUpperCase() || null,
     customer_name: $('customerName').value.trim() || null,
     note: $('note').value.trim() || null,
     items: [...cart.values()],

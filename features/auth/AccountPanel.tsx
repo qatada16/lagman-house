@@ -9,7 +9,7 @@ import { colors, spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
 import { updateOwnProfileLocal } from './profileRepo';
-import { updatePassword, uploadAvatarAndSave, validatePassword } from './authApi';
+import { deleteOwnAccount, updatePassword, uploadAvatarAndSave, validatePassword } from './authApi';
 import { pickImage } from '@/features/menu/useImagePick';
 import { confirm } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
@@ -74,6 +74,19 @@ export function AccountPanel() {
     if (await confirm(t('logout'), t('logoutConfirm'), t('logout'), t('cancel'), true)) await signOut();
   };
 
+  const deleteAccount = async () => {
+    if (!(await confirm(t('deleteAccount'), t('deleteAccountConfirm'), t('delete'), t('cancel'), true))) return;
+    setBusy(true);
+    try {
+      await deleteOwnAccount();
+      await signOut();
+    } catch (e) {
+      toast.error(`${t('deleteAccountFailed')}: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={{ gap: spacing.lg }}>
       <Card>
@@ -126,6 +139,7 @@ export function AccountPanel() {
       </Card>
 
       <Button title={t('logout')} variant="danger" icon="log-out" onPress={logout} />
+      <Button title={t('deleteAccount')} variant="ghost" icon="trash-2" onPress={deleteAccount} disabled={!online || busy} />
     </View>
   );
 }

@@ -2,7 +2,6 @@ import React from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AppText, Badge, Button, Card, EmptyState, ListRow, Screen, StatTile } from '@/components/ui';
-import { SyncIndicator } from '@/components/Indicators';
 import { useLayout, useT } from '@/lib/i18n';
 import { spacing } from '@/constants/theme';
 import { useLocalQuery } from '@/features/app/useLocalQuery';
@@ -20,20 +19,21 @@ export default function DashboardScreen() {
   const profile = useAuthStore((s) => s.profile);
 
   const [data] = useLocalQuery(() => {
-    const today = { from: startOfDay(new Date()), to: new Date(Date.now() + 60_000) };
-    const month = { from: daysAgo(30), to: new Date(Date.now() + 60_000) };
+    const to = new Date(Date.now() + 60_000);
+    const today = { from: startOfDay(new Date()), to, adminId: profile?.id ?? null };
+    const month = { from: daysAgo(30), to, adminId: profile?.id ?? null };
     return {
       today: analytics(today),
       topItems: analytics(month).topItems.slice(0, 5),
       recent: listOrders({ ...today, includeTest: true }, 6),
-      pending: countPendingCashiers(),
+      pending: countPendingCashiers(profile?.id ?? null),
       low: lowStockItems(),
       currency: getSettings().currency_symbol,
     };
-  });
+  }, [profile?.id]);
 
   return (
-    <Screen title={t('dashboardTitle')} subtitle={profile?.name} actions={<SyncIndicator />}>
+    <Screen title={t('dashboardTitle')} subtitle={profile?.name} safeTop={false}>
       <View style={[row, { gap: spacing.md, flexWrap: 'wrap' }]}>
         <StatTile label={t('revenueToday')} value={formatMoney(data.today.revenue, data.currency)} tone="action" />
         <StatTile label={t('ordersToday')} value={String(data.today.count)} tone="dark" />
@@ -42,23 +42,22 @@ export default function DashboardScreen() {
       </View>
 
       <View style={[row, { gap: spacing.lg, flexWrap: 'wrap', alignItems: 'flex-start' }]}>
-        <Card title={t('recentOrders')} style={{ flex: 1, minWidth: 300 }} padded={false}>
-          <View style={{ padding: spacing.lg, paddingBottom: 0 }} />
+        <Card title={t('recentOrders')} style={{ flex: 1, minWidth: 300 }} right={<Button title={t('seeAll')} variant="ghost" size="sm" onPress={() => router.push('/(admin)/history')} />}>
           {data.recent.length === 0 ? (
             <EmptyState title={t('noOrdersYet')} icon="shopping-bag" />
           ) : (
-            data.recent.map((o) => (
-              <ListRow
-                key={o.id}
-                title={`${o.order_number}  ${formatMoney(o.total, data.currency)}`}
-                subtitle={`${formatTime(o.created_at)}  ${o.cashier_name ?? ''}`}
-                right={o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : !o.is_dirty ? <Badge label={t('syncedBadge')} tone="success" /> : <Badge label={t('unsynced')} />}
-              />
-            ))
+            <View style={{ marginHorizontal: -spacing.lg, marginBottom: -spacing.lg }}>
+              {data.recent.map((o, i) => (
+                <ListRow
+                  key={o.id}
+                  title={`${o.order_number}  ${formatMoney(o.total, data.currency)}`}
+                  subtitle={`${formatTime(o.created_at)}  ${o.cashier_name ?? ''}`}
+                  style={i === data.recent.length - 1 ? { borderBottomWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 } : null}
+                  right={o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : o.is_dirty ? <Badge label={t('unsynced')} /> : <Badge label={t('syncedBadge')} tone="success" />}
+                />
+              ))}
+            </View>
           )}
-          <View style={{ padding: spacing.md }}>
-            <Button title={t('seeAll')} variant="ghost" size="sm" onPress={() => router.push('/(admin)/history')} />
-          </View>
         </Card>
 
         <View style={{ flex: 1, minWidth: 300, gap: spacing.lg }}>

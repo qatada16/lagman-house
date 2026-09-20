@@ -1,10 +1,5 @@
-import { Alert } from 'react-native';
+import { useConfirmStore } from '@/store/confirmStore';
 
 export function confirm(title: string, message: string, confirmLabel: string, cancelLabel: string, destructive = false): Promise<boolean> {
-  return new Promise((resolve) => {
-    Alert.alert(title, message, [
-      { text: cancelLabel, style: 'cancel', onPress: () => resolve(false) },
-      { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: () => resolve(true) },
-    ]);
-  });
+  return useConfirmStore.getState().open({ title, message, confirmLabel, cancelLabel, destructive });
 }

@@ -4,6 +4,7 @@ import { requestSync } from '@/features/sync/syncEngine';
 
 const DEFAULTS: RestaurantSettings = {
   restaurant_name: 'Lagman House',
+  restaurant_name_ur: 'لغمن ہاؤس',
   restaurant_address: '',
   currency_symbol: 'Rs',
   logo_url: '',

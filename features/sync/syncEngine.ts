@@ -11,6 +11,7 @@ const BACKOFF_STEPS_MS = [30_000, 60_000, 120_000, 300_000, 900_000];
 
 let running = false;
 let queued = false;
+let aborted = false;
 let backoffIndex = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -150,12 +151,20 @@ export async function runSync(reason = 'manual'): Promise<SyncResult> {
   }
 
   running = true;
+  aborted = false;
   store.set({ status: 'syncing' });
   let pulled = 0;
   let pushed = 0;
   try {
-    for (const t of SYNC_TABLES) if (t.pull) pulled += await pullTable(t);
-    for (const t of SYNC_TABLES) if (t.push) pushed += await pushTable(t);
+    for (const t of SYNC_TABLES) {
+      if (aborted) throw new Error('aborted');
+      if (t.pull) pulled += await pullTable(t);
+    }
+    for (const t of SYNC_TABLES) {
+      if (aborted) throw new Error('aborted');
+      if (t.push) pushed += await pushTable(t);
+    }
+    if (aborted) throw new Error('aborted');
     if (await reconcileStock()) {
       const stock = SYNC_TABLES.find((t) => t.name === 'stock_items');
       if (stock) pulled += await pullTable(stock);
@@ -169,6 +178,10 @@ export async function runSync(reason = 'manual'): Promise<SyncResult> {
     return { ok: true, pulled, pushed };
   } catch (e) {
     const message = (e as Error).message;
+    if (message === 'aborted') {
+      store.set({ status: 'idle' });
+      return { ok: false, pulled, pushed, error: message };
+    }
     console.warn('[sync] failed', message);
     store.set({ status: 'error', lastError: message });
     countPending();
@@ -195,6 +208,13 @@ export function requestSync(delayMs = 1500) {
   countPending();
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => void runSync('local-write'), delayMs);
+}
+
+export function abortSync() {
+  aborted = true;
+  queued = false;
+  if (retryTimer) clearTimeout(retryTimer);
+  if (debounceTimer) clearTimeout(debounceTimer);
 }
 
 export function resetSyncState() {

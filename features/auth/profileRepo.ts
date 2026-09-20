@@ -5,7 +5,7 @@ import { requestSync } from '@/features/sync/syncEngine';
 type LocalProfile = Omit<Profile, 'phone_confirmed'> & { phone_confirmed: number; is_dirty: number };
 
 function toProfile(r: LocalProfile): Profile {
-  return { ...r, phone_confirmed: !!r.phone_confirmed };
+  return { ...r, phone_confirmed: !!r.phone_confirmed, admin_id: r.admin_id ?? null };
 }
 
 export function cacheProfile(p: Profile, dirty = false) {
@@ -25,16 +25,20 @@ export function getCurrentUserId() {
   return kvGet('current_user_id');
 }
 
-export function listCashiers(): Profile[] {
-  return all<LocalProfile>("SELECT * FROM profiles WHERE role = 'cashier' ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC").map(toProfile);
+// Cashiers linked to this admin plus orphaned ones (their admin deleted the account).
+export function listCashiers(adminId: string | null): Profile[] {
+  return all<LocalProfile>(
+    "SELECT * FROM profiles WHERE role = 'cashier' AND (admin_id = ? OR admin_id IS NULL) ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC",
+    [adminId]
+  ).map(toProfile);
 }
 
-export function countPendingCashiers() {
-  return get<{ c: number }>("SELECT COUNT(*) AS c FROM profiles WHERE role = 'cashier' AND status = 'pending'")?.c ?? 0;
+export function countPendingCashiers(adminId: string | null) {
+  return get<{ c: number }>("SELECT COUNT(*) AS c FROM profiles WHERE role = 'cashier' AND status = 'pending' AND (admin_id = ? OR admin_id IS NULL)", [adminId])?.c ?? 0;
 }
 
-export function setCashierStatusLocal(id: string, status: AccountStatus) {
-  run('UPDATE profiles SET status = ?, updated_at = ?, is_dirty = 1 WHERE id = ?', [status, nowIso(), id]);
+export function setCashierStatusLocal(id: string, status: AccountStatus, adminId: string) {
+  run('UPDATE profiles SET status = ?, admin_id = COALESCE(admin_id, ?), updated_at = ?, is_dirty = 1 WHERE id = ?', [status, adminId, nowIso(), id]);
   requestSync(300);
 }
 

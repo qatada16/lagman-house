@@ -19,7 +19,6 @@ export const SYNC_TABLES: SyncTable[] = [
   { name: 'stock_items', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
   { name: 'stock_links', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
   { name: 'receipt_templates', key: 'id', boolCols: ['is_active'], jsonCols: ['config'], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'qr_tables', key: 'id', boolCols: ['is_active'], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
   { name: 'orders', key: 'id', boolCols: ['is_test', 'stock_deducted'], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
   { name: 'order_items', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
 ];

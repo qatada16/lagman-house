@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { clearUserData, initDb } from '@/lib/db';
 import type { Profile } from '@/lib/types';
 import { cacheProfile, getCachedProfile, getCurrentUserId, setCurrentUserId } from '@/features/auth/profileRepo';
-import { resetSyncState } from '@/features/sync/syncEngine';
+import { abortSync, resetSyncState } from '@/features/sync/syncEngine';
 import { useLanguageStore } from './languageStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
@@ -13,6 +13,7 @@ interface AuthState {
   status: Status;
   session: Session | null;
   profile: Profile | null;
+  resolving: boolean;
   pendingPhotoUri: string | null;
   pendingCredentials: { email: string; password: string } | null;
   init: () => Promise<void>;
@@ -47,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   status: 'loading',
   session: null,
   profile: null,
+  resolving: false,
   pendingPhotoUri: null,
   pendingCredentials: null,
 
@@ -88,12 +90,14 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
     const userId = session.user.id;
     const cached = getCachedProfile(userId);
     if (cached) set({ profile: cached, status: 'signedIn' });
+    else set({ resolving: true });
     setCurrentUserId(userId);
 
     const fresh = await fetchProfile(userId);
+    if (useAuthStore.getState().session?.user.id !== userId) return;
     if (fresh) {
       cacheProfile(fresh);
-      set({ profile: fresh, status: 'signedIn' });
+      set({ profile: fresh, status: 'signedIn', resolving: false });
       if (fresh.language !== useLanguageStore.getState().lang) useLanguageStore.getState().setLang(fresh.language);
     } else if (!cached) {
       // Profile row may lag the auth user by a moment right after signup.
@@ -101,9 +105,9 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
       const retry = await fetchProfile(userId);
       if (retry) {
         cacheProfile(retry);
-        set({ profile: retry, status: 'signedIn' });
+        set({ profile: retry, status: 'signedIn', resolving: false });
       } else {
-        set({ status: 'signedIn', profile: null });
+        set({ status: 'signedIn', profile: null, resolving: false });
       }
     }
     subscribeToOwnProfile(userId, (p) => {
@@ -132,18 +136,16 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   setPendingCredentials: (c) => set({ pendingCredentials: c }),
 
   signOut: async () => {
+    abortSync();
     if (profileChannel) {
       supabase.removeChannel(profileChannel);
       profileChannel = null;
     }
-    try {
-      await supabase.auth.signOut({ scope: 'local' });
-    } catch {
-      // offline: local sign-out still proceeds
-    }
     setCurrentUserId(null);
     clearUserData();
     resetSyncState();
-    set({ status: 'signedOut', session: null, profile: null, pendingPhotoUri: null, pendingCredentials: null });
+    set({ status: 'signedOut', session: null, profile: null, resolving: false, pendingPhotoUri: null, pendingCredentials: null });
+    // Network sign-out happens after the UI has already moved on.
+    supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
   },
 }));

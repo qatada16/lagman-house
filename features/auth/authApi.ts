@@ -25,6 +25,17 @@ export async function listAdmins(): Promise<AdminSummary[]> {
   return (data ?? []) as AdminSummary[];
 }
 
+export async function regenerateMenuToken(): Promise<string> {
+  const { data, error } = await supabase.rpc('regenerate_menu_token');
+  if (error) throw error;
+  return data as string;
+}
+
+export async function setDefaultMenu(value: boolean) {
+  const { error } = await supabase.rpc('set_default_menu', { p_default: value });
+  if (error) throw error;
+}
+
 export async function deleteOwnAccount() {
   const { error } = await supabase.rpc('delete_own_account');
   if (error) throw error;

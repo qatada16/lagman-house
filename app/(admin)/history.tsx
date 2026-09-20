@@ -1,63 +1,50 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
-import { AppText, Badge, Button, Card, EmptyState, Input, ListRow, Screen, Segmented, Select, StatTile, Toggle } from '@/components/ui';
+import { AppText, Badge, Button, Card, EmptyState, ListRow, Screen, Segmented, Select, StatTile, Toggle } from '@/components/ui';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { BarChart, HBarChart } from '@/components/charts/BarChart';
+import { PeriodPicker, periodFileSuffix, usePeriod } from '@/features/reports/PeriodPicker';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
 import { useLocalQuery } from '@/features/app/useLocalQuery';
-import { analytics, listOrdersWithCounts, ordersByDay, type OrderWithMeta } from '@/features/orders/orderRepo';
+import { analytics, cashierStats, hourlyStats, itemStats, listOrdersWithCounts, ordersByDay, type CashierStat, type ItemStat, type OrderWithMeta } from '@/features/orders/orderRepo';
 import { listCashiers } from '@/features/auth/profileRepo';
 import { getSettings } from '@/features/settings/settingsRepo';
-import { daysAgo, formatDate, formatDateTime, formatMoney, parseLocalDate, startOfDay } from '@/lib/format';
+import { formatDateTime, formatMoney } from '@/lib/format';
 import { OrderDetailSheet } from '@/features/orders/OrderDetailSheet';
 import { shareCsv, toCsv } from '@/features/orders/exportCsv';
 import { toast } from '@/store/toastStore';
 import { useAuthStore } from '@/store/authStore';
 
-type Range = 'today' | '7' | '30' | '90' | 'custom';
 type ViewMode = 'cards' | 'table';
+type Tab = 'orders' | 'items' | 'cashiers';
 type Row = OrderWithMeta & { item_count: number };
 
 export default function HistoryScreen() {
   const t = useT();
   const { row } = useLayout();
   const profile = useAuthStore((s) => s.profile);
-  const [range, setRange] = useState<Range>('today');
+  const state = usePeriod('today');
   const [view, setView] = useState<ViewMode>('cards');
+  const [tab, setTab] = useState<Tab>('orders');
   const [cashierId, setCashierId] = useState<string>('all');
   const [includeTest, setIncludeTest] = useState(false);
-  const [fromText, setFromText] = useState(formatDate(daysAgo(7).toISOString()));
-  const [toText, setToText] = useState(formatDate(new Date().toISOString()));
   const [selected, setSelected] = useState<OrderWithMeta | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const period = useMemo(() => {
-    const end = new Date(Date.now() + 60_000);
-    if (range === 'today') return { from: startOfDay(new Date()), to: end };
-    if (range === 'custom') {
-      const from = parseLocalDate(fromText) ?? daysAgo(7);
-      const toDay = parseLocalDate(toText) ?? new Date();
-      const to = new Date(toDay);
-      to.setDate(to.getDate() + 1);
-      return { from: startOfDay(from), to };
-    }
-    return { from: daysAgo(Number(range) - 1), to: end };
-  }, [range, fromText, toText]);
-
-  const [data] = useLocalQuery(
-    () => {
-      const filter = { ...period, cashierId: cashierId === 'all' ? null : cashierId, includeTest, adminId: profile?.id ?? null };
-      return {
-        stats: analytics(filter),
-        orders: listOrdersWithCounts(filter),
-        days: ordersByDay(filter),
-        cashiers: listCashiers(profile?.id ?? null),
-        currency: getSettings().currency_symbol,
-      };
-    },
-    [period, cashierId, includeTest, profile?.id]
-  );
+  const [data] = useLocalQuery(() => {
+    const filter = { ...state.period, cashierId: cashierId === 'all' ? null : cashierId, includeTest, adminId: profile?.id ?? null };
+    return {
+      stats: analytics(filter),
+      orders: listOrdersWithCounts(filter),
+      days: ordersByDay(filter),
+      cashiers: cashierStats(filter),
+      hours: hourlyStats(filter),
+      items: itemStats(filter),
+      cashierList: listCashiers(profile?.id ?? null),
+      currency: getSettings().currency_symbol,
+    };
+  }, [state.period, cashierId, includeTest, profile?.id]);
 
   const money = (v: number) => formatMoney(v, data.currency);
   const shortMoney = (v: number) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v)));
@@ -65,23 +52,22 @@ export default function HistoryScreen() {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const csv = toCsv(
-        [t('colOrder'), t('colDate'), t('colCashier'), t('colItems'), t('subtotal'), t('colTotal'), t('amountReceived'), t('paymentMethod'), t('colSource'), t('testOrder'), t('notes')],
-        data.orders.map((o) => [
-          o.order_number,
-          formatDateTime(o.created_at),
-          o.cashier_name ?? '',
-          o.item_count,
-          o.subtotal,
-          o.total,
-          o.amount_received ?? '',
-          o.payment_method ?? '',
-          o.source,
-          o.is_test ? 'yes' : 'no',
-          o.note ?? '',
-        ])
-      );
-      await shareCsv(`lagman-house-orders-${formatDate(period.from.toISOString())}-to-${formatDate(new Date(period.to.getTime() - 1).toISOString())}.csv`, csv);
+      let csv: string;
+      let name: string;
+      if (tab === 'items') {
+        csv = toCsv([t('item'), t('colQuantity'), t('orders'), t('colRevenue')], data.items.map((i) => [i.name, i.quantity, i.orders, i.revenue]));
+        name = 'items';
+      } else if (tab === 'cashiers') {
+        csv = toCsv([t('colCashier'), t('orders'), t('colRevenue'), t('colAvg')], data.cashiers.map((c) => [c.name, c.count, c.revenue, Math.round(c.average * 100) / 100]));
+        name = 'cashiers';
+      } else {
+        csv = toCsv(
+          [t('colOrder'), t('colDate'), t('colCashier'), t('colItems'), t('subtotal'), t('colTotal'), t('amountReceived'), t('paymentMethod'), t('colSource'), t('testOrder'), t('notes')],
+          data.orders.map((o) => [o.order_number, formatDateTime(o.created_at), o.cashier_name ?? '', o.item_count, o.subtotal, o.total, o.amount_received ?? '', o.payment_method ?? '', o.source, o.is_test ? 'yes' : 'no', o.note ?? ''])
+        );
+        name = 'orders';
+      }
+      await shareCsv(`lagman-house-${name}-${periodFileSuffix(state.period)}.csv`, csv);
       toast.success(t('exported'));
     } catch (e) {
       toast.error(`${t('exportFailed')}: ${(e as Error).message}`);
@@ -90,7 +76,7 @@ export default function HistoryScreen() {
     }
   };
 
-  const columns: Column<Row>[] = [
+  const orderColumns: Column<Row>[] = [
     { key: 'order', title: t('colOrder'), width: 110, render: (o) => o.order_number, sortValue: (o) => o.order_number },
     { key: 'date', title: t('colDate'), width: 140, render: (o) => formatDateTime(o.created_at), sortValue: (o) => o.created_at },
     { key: 'cashier', title: t('colCashier'), width: 130, render: (o) => o.cashier_name ?? '-', sortValue: (o) => o.cashier_name ?? '' },
@@ -112,32 +98,31 @@ export default function HistoryScreen() {
     { key: 'sync', title: t('status'), width: 90, render: (o) => <Badge label={o.is_dirty ? t('unsynced') : t('syncedBadge')} tone={o.is_dirty ? 'neutral' : 'success'} />, sortValue: (o) => (o.is_dirty ? 1 : 0) },
   ];
 
+  const itemColumns: Column<ItemStat>[] = [
+    { key: 'name', title: t('item'), width: 200, render: (i) => i.name, sortValue: (i) => i.name },
+    { key: 'qty', title: t('colQuantity'), width: 80, align: 'right', render: (i) => String(i.quantity), sortValue: (i) => i.quantity },
+    { key: 'orders', title: t('orders'), width: 80, align: 'right', render: (i) => String(i.orders), sortValue: (i) => i.orders },
+    { key: 'revenue', title: t('colRevenue'), width: 120, align: 'right', render: (i) => money(i.revenue), sortValue: (i) => i.revenue },
+  ];
+
+  const cashierColumns: Column<CashierStat>[] = [
+    { key: 'name', title: t('colCashier'), width: 160, render: (c) => c.name, sortValue: (c) => c.name },
+    { key: 'count', title: t('orders'), width: 80, align: 'right', render: (c) => String(c.count), sortValue: (c) => c.count },
+    { key: 'revenue', title: t('colRevenue'), width: 120, align: 'right', render: (c) => money(c.revenue), sortValue: (c) => c.revenue },
+    { key: 'avg', title: t('colAvg'), width: 110, align: 'right', render: (c) => money(c.average), sortValue: (c) => c.average },
+  ];
+
   const dayLabel = (d: string) => d.slice(5).replace('-', '/');
+  const hourLabel = (h: number) => `${String(h).padStart(2, '0')}`;
+  const busy = data.hours.filter((h) => h.count > 0);
+  const hourRange = busy.length ? data.hours.slice(Math.max(0, busy[0].hour - 1), Math.min(24, busy[busy.length - 1].hour + 2)) : [];
 
   return (
     <Screen safeTop={false} title={t('historyTitle')} actions={<Button title={t('exportCsv')} variant="outline" size="sm" icon="download" onPress={exportCsv} loading={exporting} disabled={data.orders.length === 0} />}>
       <Card>
-        <Segmented<Range>
-          label={t('dateRange')}
-          value={range}
-          onChange={setRange}
-          options={[
-            { value: 'today', label: t('rangeToday') },
-            { value: '7', label: t('range7') },
-            { value: '30', label: t('range30') },
-            { value: '90', label: t('range90') },
-            { value: 'custom', label: t('rangeCustom') },
-          ]}
-          scroll
-        />
-        {range === 'custom' ? (
-          <View style={[row, { gap: spacing.sm, marginTop: spacing.sm }]}>
-            <Input label={t('from')} value={fromText} onChangeText={setFromText} placeholder={t('dateFormatHint')} containerStyle={{ flex: 1 }} />
-            <Input label={t('to')} value={toText} onChangeText={setToText} placeholder={t('dateFormatHint')} containerStyle={{ flex: 1 }} />
-          </View>
-        ) : null}
+        <PeriodPicker state={state} />
         <View style={{ height: spacing.sm }} />
-        <Select label={t('filterCashier')} value={cashierId} onChange={setCashierId} options={[{ value: 'all', label: t('allCashiers') }, ...data.cashiers.map((c) => ({ value: c.id, label: c.name }))]} />
+        <Select label={t('filterCashier')} value={cashierId} onChange={setCashierId} options={[{ value: 'all', label: t('allCashiers') }, ...data.cashierList.map((c) => ({ value: c.id, label: c.name }))]} />
         <Toggle label={t('includeTest')} value={includeTest} onChange={setIncludeTest} />
       </Card>
 
@@ -151,59 +136,66 @@ export default function HistoryScreen() {
         <Card title={t('revenueByDay')} style={{ flex: 1, minWidth: 300 }}>
           <BarChart data={data.days.map((d) => ({ label: dayLabel(d.day), value: d.revenue }))} formatValue={shortMoney} emptyLabel={t('noData')} color={colors.action} width={300} />
         </Card>
-        <Card title={t('ordersByDay')} style={{ flex: 1, minWidth: 300 }}>
-          <BarChart data={data.days.map((d) => ({ label: dayLabel(d.day), value: d.count }))} emptyLabel={t('noData')} color={colors.accentDark} width={300} />
+        <Card title={t('hotHours')} style={{ flex: 1, minWidth: 300 }}>
+          <BarChart data={hourRange.map((h) => ({ label: hourLabel(h.hour), value: h.count }))} emptyLabel={t('noData')} color={colors.accentDark} width={300} />
         </Card>
       </View>
 
-      <Card title={t('mostSold')}>
-        <HBarChart data={data.stats.topItems.map((it) => ({ label: it.name, value: it.quantity }))} emptyLabel={t('noOrdersRange')} color={colors.surfaceHighlight} />
-        {data.stats.topItems.length > 0 ? (
-          <View style={{ marginTop: spacing.sm }}>
-            {data.stats.topItems.map((it) => (
-              <View key={it.name} style={[row, { justifyContent: 'space-between', paddingVertical: 4 }]}>
-                <AppText variant="small" style={{ flex: 1 }}>
-                  {it.name}
-                </AppText>
-                <AppText variant="small" weight="600">
-                  {t('soldCount', { n: it.quantity })}
-                </AppText>
-                <AppText variant="small" style={{ minWidth: 80 }} align="right">
-                  {money(it.revenue)}
-                </AppText>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </Card>
+      <View style={[row, { gap: spacing.lg, flexWrap: 'wrap', alignItems: 'flex-start' }]}>
+        <Card title={t('cashierRanking')} style={{ flex: 1, minWidth: 300 }}>
+          <HBarChart data={data.cashiers.map((c) => ({ label: c.name, value: c.count }))} emptyLabel={t('noOrdersRange')} color={colors.surfaceHighlight} />
+        </Card>
+        <Card title={t('mostSold')} style={{ flex: 1, minWidth: 300 }}>
+          <HBarChart data={data.items.slice(0, 8).map((i) => ({ label: i.name, value: i.quantity }))} emptyLabel={t('noOrdersRange')} color={colors.action} />
+        </Card>
+      </View>
 
-      <Card title={t('orderList')} right={<Segmented<ViewMode> value={view} onChange={setView} scroll options={[{ value: 'cards', label: t('viewCards') }, { value: 'table', label: t('viewTable') }]} />}>
-        {view === 'table' ? (
-          <DataTable columns={columns} rows={data.orders} keyOf={(o) => o.id} onRowPress={setSelected} initialSort={{ key: 'date', dir: 'desc' }} emptyLabel={t('noOrdersRange')} />
-        ) : data.orders.length === 0 ? (
-          <EmptyState title={t('noOrdersRange')} icon="shopping-bag" />
+      <Card
+        title={tab === 'orders' ? t('orderList') : tab === 'items' ? t('itemsTable') : t('cashiersTable')}
+        right={<Segmented<Tab> value={tab} onChange={setTab} scroll options={[{ value: 'orders', label: t('orders') }, { value: 'items', label: t('items') }, { value: 'cashiers', label: t('cashiersTable') }]} />}
+      >
+        {tab === 'items' ? (
+          <DataTable columns={itemColumns} rows={data.items} keyOf={(i) => i.name} initialSort={{ key: 'qty', dir: 'desc' }} emptyLabel={t('noOrdersRange')} />
+        ) : tab === 'cashiers' ? (
+          <DataTable columns={cashierColumns} rows={data.cashiers} keyOf={(c) => c.cashier_id ?? 'none'} initialSort={{ key: 'count', dir: 'desc' }} emptyLabel={t('noOrdersRange')} />
         ) : (
-          <View style={{ marginHorizontal: -spacing.lg, marginBottom: -spacing.lg }}>
-          {data.orders.map((o, i) => (
-            <ListRow
-              key={o.id}
-              title={`${o.order_number}  ${money(o.total)}`}
-              subtitle={`${formatDateTime(o.created_at)}  ${o.cashier_name ?? ''}`}
-              onPress={() => setSelected(o)}
-              chevron
-              style={i === data.orders.length - 1 ? { borderBottomWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 } : null}
-              right={
-                <View style={[row, { gap: 4 }]}>
-                  {o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : null}
-                  {o.source === 'qr' ? <Badge label={t('sourceQr')} tone="info" /> : null}
-                  {o.is_dirty ? <Badge label={t('unsynced')} /> : null}
-                </View>
-              }
-            />
-          ))}
-          </View>
+          <>
+            <View style={[row, { marginBottom: spacing.sm }]}>
+              <Segmented<ViewMode> value={view} onChange={setView} scroll options={[{ value: 'cards', label: t('viewCards') }, { value: 'table', label: t('viewTable') }]} />
+            </View>
+            {view === 'table' ? (
+              <DataTable columns={orderColumns} rows={data.orders} keyOf={(o) => o.id} onRowPress={setSelected} initialSort={{ key: 'date', dir: 'desc' }} emptyLabel={t('noOrdersRange')} />
+            ) : data.orders.length === 0 ? (
+              <EmptyState title={t('noOrdersRange')} icon="shopping-bag" />
+            ) : (
+              <View style={{ marginHorizontal: -spacing.lg, marginBottom: -spacing.lg }}>
+                {data.orders.map((o, i) => (
+                  <ListRow
+                    key={o.id}
+                    title={`${o.order_number}  ${money(o.total)}`}
+                    subtitle={`${formatDateTime(o.created_at)}  ${o.cashier_name ?? ''}`}
+                    onPress={() => setSelected(o)}
+                    chevron
+                    style={i === data.orders.length - 1 ? { borderBottomWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 } : null}
+                    right={
+                      <View style={[row, { gap: 4 }]}>
+                        {o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : null}
+                        {o.source === 'qr' ? <Badge label={t('sourceQr')} tone="info" /> : null}
+                        {o.is_dirty ? <Badge label={t('unsynced')} /> : null}
+                      </View>
+                    }
+                  />
+                ))}
+              </View>
+            )}
+          </>
         )}
       </Card>
+      {data.stats.topItems.length > 0 ? (
+        <AppText variant="small" align="center">
+          {`${data.orders.length} ${t('orders').toLowerCase()}`}
+        </AppText>
+      ) : null}
       <OrderDetailSheet order={selected} onClose={() => setSelected(null)} />
     </Screen>
   );

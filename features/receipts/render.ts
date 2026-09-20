@@ -269,6 +269,7 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
     {
       id: 'sample-item',
       order_id: order.id,
+      admin_id: null,
       menu_item_id: item?.id ?? null,
       variant_id: variant?.id ?? null,
       item_name: name,

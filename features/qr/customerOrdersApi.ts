@@ -35,10 +35,10 @@ export async function cancelCustomerOrder(orderId: string) {
   if (error) throw error;
 }
 
-export function subscribeCustomerOrders(onChange: (kind: 'INSERT' | 'UPDATE' | 'DELETE', row: CustomerOrder) => void): RealtimeChannel {
+export function subscribeCustomerOrders(tenantId: string, onChange: (kind: 'INSERT' | 'UPDATE' | 'DELETE', row: CustomerOrder) => void): RealtimeChannel {
   return supabase
-    .channel('customer_orders:all')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_orders' }, (payload) => {
+    .channel(`customer_orders:${tenantId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_orders', filter: `admin_id=eq.${tenantId}` }, (payload) => {
       const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as CustomerOrder;
       onChange(payload.eventType, row);
     })

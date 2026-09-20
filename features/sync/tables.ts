@@ -1,26 +1,23 @@
 export interface SyncTable {
   name: string;
-  key: 'id' | 'key';
   boolCols: string[];
   jsonCols: string[];
-  pull: boolean;
-  push: boolean;
-  // profiles rows belong to other users; only UPDATE passes RLS for admins.
   pushMode: 'upsert' | 'update';
 }
 
-// Push order matters: parents before children.
 export const SYNC_TABLES: SyncTable[] = [
-  { name: 'profiles', key: 'id', boolCols: ['phone_confirmed'], jsonCols: [], pull: true, push: true, pushMode: 'update' },
-  { name: 'settings', key: 'key', boolCols: [], jsonCols: ['value'], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'categories', key: 'id', boolCols: ['is_active'], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'menu_items', key: 'id', boolCols: ['has_variants', 'is_active'], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'menu_item_variants', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'stock_items', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'stock_links', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'receipt_templates', key: 'id', boolCols: ['is_active'], jsonCols: ['config'], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'orders', key: 'id', boolCols: ['is_test', 'stock_deducted'], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
-  { name: 'order_items', key: 'id', boolCols: [], jsonCols: [], pull: true, push: true, pushMode: 'upsert' },
+  { name: 'profiles', boolCols: ['phone_confirmed', 'menu_is_default'], jsonCols: [], pushMode: 'update' },
+  { name: 'tenant_settings', boolCols: [], jsonCols: ['value'], pushMode: 'upsert' },
+  { name: 'categories', boolCols: ['is_active'], jsonCols: [], pushMode: 'upsert' },
+  { name: 'menu_items', boolCols: ['has_variants', 'is_active'], jsonCols: [], pushMode: 'upsert' },
+  { name: 'menu_item_variants', boolCols: [], jsonCols: [], pushMode: 'upsert' },
+  { name: 'stock_items', boolCols: [], jsonCols: [], pushMode: 'upsert' },
+  { name: 'stock_links', boolCols: [], jsonCols: [], pushMode: 'upsert' },
+  { name: 'stock_purchases', boolCols: [], jsonCols: [], pushMode: 'upsert' },
+  { name: 'expenses', boolCols: [], jsonCols: [], pushMode: 'upsert' },
+  { name: 'receipt_templates', boolCols: ['is_active'], jsonCols: ['config'], pushMode: 'upsert' },
+  { name: 'orders', boolCols: ['is_test', 'stock_deducted'], jsonCols: [], pushMode: 'upsert' },
+  { name: 'order_items', boolCols: [], jsonCols: [], pushMode: 'upsert' },
 ];
 
 type Row = Record<string, unknown>;
@@ -40,6 +37,10 @@ export function toServer(t: SyncTable, row: Row): Row {
   for (const c of t.jsonCols) {
     const v = row[c];
     out[c] = typeof v === 'string' ? safeParse(v) : v;
+  }
+  if (t.name === 'profiles') {
+    delete out.menu_token;
+    delete out.menu_is_default;
   }
   return out;
 }

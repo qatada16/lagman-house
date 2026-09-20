@@ -36,7 +36,6 @@ function setMeta(table: string, value: string) {
 export function countPending() {
   let n = 0;
   for (const t of SYNC_TABLES) {
-    if (!t.push) continue;
     n += get<{ c: number }>(`SELECT COUNT(*) AS c FROM ${t.name} WHERE is_dirty = 1`)?.c ?? 0;
   }
   useSyncStore.getState().set({ pendingCount: n });
@@ -58,8 +57,8 @@ async function pullTable(t: SyncTable): Promise<number> {
     if (error) throw new Error(`${t.name}: ${error.message}`);
     const rows = (data ?? []) as Row[];
     for (const row of rows) {
-      const id = row[t.key] as string;
-      const local = get<{ is_dirty: number }>(`SELECT is_dirty FROM ${t.name} WHERE ${t.key} = ?`, [id]);
+      const id = row.id as string;
+      const local = get<{ is_dirty: number }>(`SELECT is_dirty FROM ${t.name} WHERE id = ?`, [id]);
       if (local?.is_dirty) continue; // local edit wins until it is pushed
       upsert(t.name, fromServer(t, row));
       pulled++;
@@ -77,15 +76,15 @@ async function pushRows(t: SyncTable, rows: Row[]) {
   const payload = rows.map((r) => toServer(t, r));
   if (t.pushMode === 'update') {
     for (const r of payload) {
-      const { error } = await supabase.from(t.name).update(r).eq(t.key, r[t.key] as string);
+      const { error } = await supabase.from(t.name).update(r).eq('id', r.id as string);
       if (error) throw new Error(`${t.name}: ${error.message}`);
     }
   } else {
-    const { error } = await supabase.from(t.name).upsert(payload, { onConflict: t.key });
+    const { error } = await supabase.from(t.name).upsert(payload, { onConflict: 'id' });
     if (error) throw new Error(`${t.name}: ${error.message}`);
   }
   for (const r of rows) {
-    run(`UPDATE ${t.name} SET is_dirty = 0 WHERE ${t.key} = ? AND updated_at = ?`, [r[t.key] as string, r.updated_at as string]);
+    run(`UPDATE ${t.name} SET is_dirty = 0 WHERE id = ? AND updated_at = ?`, [r.id as string, r.updated_at as string]);
   }
 }
 
@@ -105,7 +104,7 @@ async function pushTable(t: SyncTable): Promise<number> {
           await pushRows(t, [r]);
           pushed++;
         } catch (inner) {
-          console.warn('[sync] row push failed', t.name, r[t.key], (inner as Error).message);
+          console.warn('[sync] row push failed', t.name, r.id, (inner as Error).message);
           throw inner;
         }
       }
@@ -158,11 +157,11 @@ export async function runSync(reason = 'manual'): Promise<SyncResult> {
   try {
     for (const t of SYNC_TABLES) {
       if (aborted) throw new Error('aborted');
-      if (t.pull) pulled += await pullTable(t);
+      pulled += await pullTable(t);
     }
     for (const t of SYNC_TABLES) {
       if (aborted) throw new Error('aborted');
-      if (t.push) pushed += await pushTable(t);
+      pushed += await pushTable(t);
     }
     if (aborted) throw new Error('aborted');
     if (await reconcileStock()) {

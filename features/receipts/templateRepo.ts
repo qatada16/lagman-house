@@ -1,5 +1,6 @@
 import { all, get, nowIso, run, upsert } from '@/lib/db';
 import { newId } from '@/lib/device';
+import { getTenantId, requireTenantId } from '@/lib/tenant';
 import type { ReceiptTemplate, ReceiptTemplateConfig } from '@/lib/types';
 import { requestSync } from '@/features/sync/syncEngine';
 
@@ -23,6 +24,7 @@ export const DEFAULT_TEMPLATE_CONFIG: ReceiptTemplateConfig = {
 };
 
 type Row = Omit<ReceiptTemplate, 'config' | 'is_active'> & { config: string; is_active: number };
+const tenant = () => getTenantId() ?? '';
 
 export function normalizeConfig(raw: unknown): ReceiptTemplateConfig {
   const c = (raw && typeof raw === 'object' ? raw : {}) as Partial<ReceiptTemplateConfig>;
@@ -30,7 +32,7 @@ export function normalizeConfig(raw: unknown): ReceiptTemplateConfig {
   return {
     paperWidthMm: c.paperWidthMm === 80 ? 80 : 58,
     style: { ...d.style, ...(c.style ?? {}) },
-    header: { ...d.header, ...(c.header ?? {}) , extraLines: c.header?.extraLines ?? [] },
+    header: { ...d.header, ...(c.header ?? {}), extraLines: c.header?.extraLines ?? [] },
     dateTime: { ...d.dateTime, ...(c.dateTime ?? {}) },
     orderNumber: { ...d.orderNumber, ...(c.orderNumber ?? {}) },
     cashier: { ...d.cashier, ...(c.cashier ?? {}) },
@@ -59,19 +61,21 @@ function toTemplate(r: Row): ReceiptTemplate {
 
 export function listTemplates(activeOnly = false): ReceiptTemplate[] {
   const where = activeOnly ? 'deleted_at IS NULL AND is_active = 1' : 'deleted_at IS NULL';
-  return all<Row>(`SELECT * FROM receipt_templates WHERE ${where} ORDER BY sort_order, name`).map(toTemplate);
+  return all<Row>(`SELECT * FROM receipt_templates WHERE admin_id = ? AND ${where} ORDER BY sort_order, name`, [tenant()]).map(toTemplate);
 }
 
 export function getTemplate(id: string): ReceiptTemplate | null {
-  const r = get<Row>('SELECT * FROM receipt_templates WHERE id = ?', [id]);
+  const r = get<Row>('SELECT * FROM receipt_templates WHERE id = ? AND admin_id = ?', [id, tenant()]);
   return r ? toTemplate(r) : null;
 }
 
 export function saveTemplate(input: { id?: string; name: string; is_active: boolean; config: ReceiptTemplateConfig; sort_order?: number }): ReceiptTemplate {
+  const adminId = requireTenantId();
   const now = nowIso();
   const existing = input.id ? get<Row>('SELECT * FROM receipt_templates WHERE id = ?', [input.id]) : null;
   const row = {
     id: input.id ?? newId(),
+    admin_id: adminId,
     name: input.name.trim(),
     is_active: input.is_active ? 1 : 0,
     sort_order: input.sort_order ?? existing?.sort_order ?? listTemplates().length,

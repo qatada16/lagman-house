@@ -27,20 +27,27 @@ CREATE TABLE IF NOT EXISTS profiles (
   status TEXT NOT NULL,
   push_token TEXT,
   language TEXT NOT NULL DEFAULT 'en',
+  admin_id TEXT,
+  menu_token TEXT,
+  menu_is_default INTEGER NOT NULL DEFAULT 0,
   created_at TEXT,
   updated_at TEXT,
   is_dirty INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS tenant_settings (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  key TEXT NOT NULL,
   value TEXT NOT NULL,
   updated_at TEXT,
   is_dirty INTEGER NOT NULL DEFAULT 0
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_settings_key ON tenant_settings(admin_id, key);
 
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   name TEXT NOT NULL,
   name_ur TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -53,6 +60,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE TABLE IF NOT EXISTS menu_items (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   category_id TEXT,
   name TEXT NOT NULL,
   name_ur TEXT,
@@ -70,6 +78,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 CREATE TABLE IF NOT EXISTS menu_item_variants (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   menu_item_id TEXT NOT NULL,
   name TEXT NOT NULL,
   price REAL NOT NULL DEFAULT 0,
@@ -83,6 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_variants_item ON menu_item_variants(menu_item_id)
 
 CREATE TABLE IF NOT EXISTS stock_items (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   name TEXT NOT NULL,
   unit TEXT NOT NULL DEFAULT 'g',
   quantity REAL NOT NULL DEFAULT 0,
@@ -95,6 +105,7 @@ CREATE TABLE IF NOT EXISTS stock_items (
 
 CREATE TABLE IF NOT EXISTS stock_links (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   menu_item_id TEXT NOT NULL,
   variant_id TEXT,
   stock_item_id TEXT NOT NULL,
@@ -106,8 +117,44 @@ CREATE TABLE IF NOT EXISTS stock_links (
 );
 CREATE INDEX IF NOT EXISTS idx_stock_links_item ON stock_links(menu_item_id);
 
+CREATE TABLE IF NOT EXISTS stock_purchases (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  stock_item_id TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  unit_cost REAL NOT NULL DEFAULT 0,
+  total_cost REAL NOT NULL DEFAULT 0,
+  supplier TEXT,
+  note TEXT,
+  purchased_at TEXT NOT NULL,
+  expense_id TEXT,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_stock ON stock_purchases(stock_item_id);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  amount REAL NOT NULL,
+  category TEXT NOT NULL DEFAULT 'general',
+  occurred_at TEXT NOT NULL,
+  note TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  stock_purchase_id TEXT,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(occurred_at);
+
 CREATE TABLE IF NOT EXISTS receipt_templates (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   name TEXT NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -118,21 +165,11 @@ CREATE TABLE IF NOT EXISTS receipt_templates (
   is_dirty INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS qr_tables (
-  id TEXT PRIMARY KEY,
-  code TEXT NOT NULL,
-  label TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  deleted_at TEXT,
-  created_at TEXT,
-  updated_at TEXT,
-  is_dirty INTEGER NOT NULL DEFAULT 0
-);
-
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   order_number TEXT NOT NULL,
   cashier_id TEXT,
+  admin_id TEXT,
   status TEXT NOT NULL DEFAULT 'completed',
   source TEXT NOT NULL DEFAULT 'pos',
   customer_order_id TEXT,
@@ -156,6 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_cashier ON orders(cashier_id);
 CREATE TABLE IF NOT EXISTS order_items (
   id TEXT PRIMARY KEY,
   order_id TEXT NOT NULL,
+  admin_id TEXT,
   menu_item_id TEXT,
   variant_id TEXT,
   item_name TEXT NOT NULL,
@@ -170,18 +208,44 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 `;
 
-let initialized = false;
+const TENANT_TABLES = [
+  'tenant_settings',
+  'categories',
+  'menu_items',
+  'menu_item_variants',
+  'stock_items',
+  'stock_links',
+  'stock_purchases',
+  'expenses',
+  'receipt_templates',
+  'orders',
+  'order_items',
+  'profiles',
+];
 
 const COLUMN_MIGRATIONS: [string, string, string][] = [
   ['profiles', 'admin_id', 'TEXT'],
+  ['profiles', 'menu_token', 'TEXT'],
+  ['profiles', 'menu_is_default', 'INTEGER NOT NULL DEFAULT 0'],
   ['orders', 'admin_id', 'TEXT'],
+  ['order_items', 'admin_id', 'TEXT'],
+  ['categories', 'admin_id', 'TEXT'],
+  ['menu_items', 'admin_id', 'TEXT'],
+  ['menu_item_variants', 'admin_id', 'TEXT'],
+  ['stock_items', 'admin_id', 'TEXT'],
+  ['stock_links', 'admin_id', 'TEXT'],
+  ['receipt_templates', 'admin_id', 'TEXT'],
 ];
+
+let initialized = false;
 
 function migrate() {
   for (const [table, column, type] of COLUMN_MIGRATIONS) {
     const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
     if (!cols.some((c) => c.name === column)) db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  db.execSync('DROP TABLE IF EXISTS settings');
+  db.execSync('DROP TABLE IF EXISTS qr_tables');
 }
 
 export function initDb() {
@@ -213,10 +277,9 @@ export function upsert<T extends object>(table: string, input: T) {
   const row = input as unknown as Row;
   const keys = Object.keys(row);
   const placeholders = keys.map(() => '?').join(', ');
-  const updates = keys.filter((k) => k !== 'id' && k !== 'key').map((k) => `${k} = excluded.${k}`).join(', ');
-  const conflictKey = 'id' in row ? 'id' : 'key';
+  const updates = keys.filter((k) => k !== 'id').map((k) => `${k} = excluded.${k}`).join(', ');
   const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})
-    ON CONFLICT(${conflictKey}) DO UPDATE SET ${updates}`;
+    ON CONFLICT(id) DO UPDATE SET ${updates}`;
   run(sql, keys.map((k) => toSqlValue(row[k])));
 }
 
@@ -242,11 +305,12 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
-initDb();
-
 export function clearUserData() {
   transaction(() => {
-    for (const t of ['orders', 'order_items', 'profiles', 'sync_meta']) run(`DELETE FROM ${t}`);
+    for (const t of TENANT_TABLES) run(`DELETE FROM ${t}`);
+    run('DELETE FROM sync_meta');
     run("DELETE FROM kv WHERE key IN ('current_user_id', 'last_sync_at')");
   });
 }
+
+initDb();

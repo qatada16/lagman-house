@@ -40,6 +40,7 @@ export default function TemplateEditScreen() {
 
   const previewTemplate: ReceiptTemplate = {
     id: existing?.id ?? 'preview',
+    admin_id: existing?.admin_id ?? '',
     name,
     is_active: isActive,
     sort_order: 0,

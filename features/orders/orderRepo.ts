@@ -63,6 +63,7 @@ export function createOrder(input: CreateOrderInput): { order: Order; items: Ord
   const items: OrderItem[] = input.lines.map((l) => ({
     id: newId(),
     order_id: id,
+    admin_id: input.adminId,
     menu_item_id: l.menu_item_id,
     variant_id: l.variant_id,
     item_name: l.name,
@@ -98,7 +99,7 @@ export function getOrderItems(orderId: string): OrderItem[] {
 
 export interface OrderFilter {
   cashierId?: string | null;
-  adminId?: string | null;
+  adminId: string | null;
   from: Date;
   to: Date;
   includeTest?: boolean;
@@ -111,10 +112,8 @@ function whereFor(f: OrderFilter) {
     clauses.push('o.cashier_id = ?');
     params.push(f.cashierId);
   }
-  if (f.adminId) {
-    clauses.push('(o.admin_id = ? OR o.admin_id IS NULL)');
-    params.push(f.adminId);
-  }
+  clauses.push('o.admin_id = ?');
+  params.push(f.adminId ?? '');
   if (!f.includeTest) clauses.push('o.is_test = 0');
   return { where: clauses.join(' AND '), params };
 }
@@ -173,6 +172,59 @@ export function ordersByDay(f: OrderFilter): DayBucket[] {
   return all<DayBucket>(
     `SELECT substr(o.created_at, 1, 10) AS day, SUM(o.total) AS revenue, COUNT(*) AS count
      FROM orders o WHERE ${where} GROUP BY day ORDER BY day`,
+    params
+  );
+}
+
+export interface CashierStat {
+  cashier_id: string | null;
+  name: string;
+  count: number;
+  revenue: number;
+  average: number;
+}
+
+export function cashierStats(f: OrderFilter): CashierStat[] {
+  const { where, params } = whereFor(f);
+  return all<CashierStat>(
+    `SELECT o.cashier_id, COALESCE(p.name, '-') AS name, COUNT(*) AS count, SUM(o.total) AS revenue, AVG(o.total) AS average
+     FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
+     WHERE ${where} GROUP BY o.cashier_id ORDER BY count DESC`,
+    params
+  );
+}
+
+export interface HourStat {
+  hour: number;
+  count: number;
+  revenue: number;
+}
+
+export function hourlyStats(f: OrderFilter): HourStat[] {
+  const { where, params } = whereFor(f);
+  const rows = all<{ hour: string; count: number; revenue: number }>(
+    `SELECT strftime('%H', o.created_at, 'localtime') AS hour, COUNT(*) AS count, SUM(o.total) AS revenue
+     FROM orders o WHERE ${where} GROUP BY hour ORDER BY hour`,
+    params
+  );
+  const byHour = new Map(rows.map((r) => [Number(r.hour), r]));
+  return Array.from({ length: 24 }, (_, h) => ({ hour: h, count: byHour.get(h)?.count ?? 0, revenue: byHour.get(h)?.revenue ?? 0 }));
+}
+
+export interface ItemStat {
+  name: string;
+  quantity: number;
+  revenue: number;
+  orders: number;
+}
+
+export function itemStats(f: OrderFilter): ItemStat[] {
+  const { where, params } = whereFor(f);
+  return all<ItemStat>(
+    `SELECT CASE WHEN oi.variant_name IS NULL THEN oi.item_name ELSE oi.item_name || ' (' || oi.variant_name || ')' END AS name,
+            SUM(oi.quantity) AS quantity, SUM(oi.line_total) AS revenue, COUNT(DISTINCT oi.order_id) AS orders
+     FROM order_items oi JOIN orders o ON o.id = oi.order_id
+     WHERE ${where} GROUP BY name ORDER BY quantity DESC`,
     params
   );
 }

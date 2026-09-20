@@ -89,7 +89,7 @@ export default function MenuItemEditScreen() {
       if (localImage) {
         if (online) {
           try {
-            const url = await uploadImage('images', `menu/${saved.id}`, localImage);
+            const url = await uploadImage('images', `menu/${saved.admin_id}/${saved.id}`, localImage);
             setMenuItemImage(saved.id, url);
           } catch (e) {
             toast.error(`${t('error')}: ${(e as Error).message}`);

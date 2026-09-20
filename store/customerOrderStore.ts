@@ -8,7 +8,7 @@ interface State {
   orders: CustomerOrder[];
   loading: boolean;
   error: string | null;
-  start: () => Promise<void>;
+  start: (tenantId: string) => Promise<void>;
   stop: () => void;
   refresh: () => Promise<void>;
   remove: (id: string) => void;
@@ -22,9 +22,9 @@ export const useCustomerOrderStore = create<State>((set, getState) => ({
   loading: false,
   error: null,
 
-  start: async () => {
+  start: async (tenantId) => {
     if (channel) return;
-    channel = subscribeCustomerOrders((kind, row) => {
+    channel = subscribeCustomerOrders(tenantId, (kind, row) => {
       if (kind === 'DELETE' || row.status === 'completed' || row.status === 'cancelled') getState().remove(row.id);
       else getState().upsertLocal(row);
     });

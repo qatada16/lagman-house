@@ -1,17 +1,29 @@
 import React from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Badge, Button, Card, EmptyState, ListRow, Screen } from '@/components/ui';
-import { useT } from '@/lib/i18n';
+import { useLayout, useT } from '@/lib/i18n';
+import { spacing } from '@/constants/theme';
 import { useLocalQuery } from '@/features/app/useLocalQuery';
 import { listStockItems, stockUsageCount } from '@/features/stock/stockRepo';
 
 export default function StockScreen() {
   const t = useT();
   const router = useRouter();
+  const { row } = useLayout();
   const [items] = useLocalQuery(() => listStockItems().map((s) => ({ ...s, usedBy: stockUsageCount(s.id) })));
 
   return (
-    <Screen safeTop={false} title={t('stockTitle')} actions={<Button title={t('addStock')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/stock/new')} />}>
+    <Screen
+      safeTop={false}
+      title={t('stockTitle')}
+      actions={
+        <View style={[row, { gap: spacing.sm }]}>
+          <Button title={t('purchaseReport')} variant="outline" size="sm" icon="bar-chart-2" onPress={() => router.push('/(admin)/stock/purchases')} />
+          <Button title={t('addStock')} variant="action" size="sm" icon="plus" onPress={() => router.push('/(admin)/stock/new')} />
+        </View>
+      }
+    >
       <Card padded={false}>
         {items.length === 0 ? (
           <EmptyState title={t('noStock')} icon="package" />

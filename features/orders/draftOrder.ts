@@ -45,6 +45,7 @@ export function draftToOrder(
   const items: OrderItem[] = lines.map((l) => ({
     id: l.key,
     order_id: draft.id,
+    admin_id: opts.adminId ?? null,
     menu_item_id: l.menu_item_id,
     variant_id: l.variant_id,
     item_name: l.name,

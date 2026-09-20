@@ -2,14 +2,14 @@ import { all, get, kvGet, kvSet, nowIso, run, upsert } from '@/lib/db';
 import type { AccountStatus, Profile } from '@/lib/types';
 import { requestSync } from '@/features/sync/syncEngine';
 
-type LocalProfile = Omit<Profile, 'phone_confirmed'> & { phone_confirmed: number; is_dirty: number };
+type LocalProfile = Omit<Profile, 'phone_confirmed' | 'menu_is_default'> & { phone_confirmed: number; menu_is_default: number; is_dirty: number };
 
 function toProfile(r: LocalProfile): Profile {
-  return { ...r, phone_confirmed: !!r.phone_confirmed, admin_id: r.admin_id ?? null };
+  return { ...r, phone_confirmed: !!r.phone_confirmed, menu_is_default: !!r.menu_is_default, admin_id: r.admin_id ?? null, menu_token: r.menu_token ?? null };
 }
 
 export function cacheProfile(p: Profile, dirty = false) {
-  upsert('profiles', { ...p, phone_confirmed: p.phone_confirmed ? 1 : 0, is_dirty: dirty ? 1 : 0 });
+  upsert('profiles', { ...p, phone_confirmed: p.phone_confirmed ? 1 : 0, menu_is_default: p.menu_is_default ? 1 : 0, is_dirty: dirty ? 1 : 0 });
 }
 
 export function getCachedProfile(id: string): Profile | null {

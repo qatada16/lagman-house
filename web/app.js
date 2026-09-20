@@ -2,23 +2,26 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const cfg = window.LAGMAN_CONFIG;
 const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+const menuToken = new URLSearchParams(location.search).get('m') || null;
 
 const STR = {
   en: {
     items: 'items', review: 'Review order', yourOrder: 'Your order', name: 'Your name (optional)', note: 'Note for the kitchen (optional)',
     total: 'Total', send: 'Send to cashier', disclaimer: 'A cashier will confirm your order and take payment at the counter.',
     sent: 'Order sent', sentBody: 'Please wait for the cashier to confirm your order.', again: 'Start a new order', empty: 'The menu is not available right now.',
-    add: 'Add', all: 'All', table: 'Table', loading: 'Loading menu', failed: 'Could not load the menu. Check your connection.', sending: 'Sending',
+    add: 'Add', all: 'All', loading: 'Loading menu', failed: 'Could not load the menu. Check your connection.', sending: 'Sending',
     pending: 'Waiting for a cashier', claimed: 'A cashier is preparing your order', completed: 'Your order is confirmed', cancelled: 'This order was cancelled',
-    tableField: 'Table number (optional)', currency: 'Rs',
+    tableField: 'Table number (optional)', readOnly: 'Browsing only. Scan the QR code at your table to place an order.',
+    notFound: 'This menu link is not valid.', currency: 'Rs',
   },
   ur: {
     items: 'آئٹمز', review: 'آرڈر کا جائزہ', yourOrder: 'آپ کا آرڈر', name: 'آپ کا نام (اختیاری)', note: 'کچن کے لیے نوٹ (اختیاری)',
     total: 'کل', send: 'کیشیئر کو بھیجیں', disclaimer: 'کیشیئر آپ کے آرڈر کی تصدیق کرے گا اور کاؤنٹر پر ادائیگی لے گا۔',
     sent: 'آرڈر بھیج دیا گیا', sentBody: 'براہ کرم کیشیئر کی تصدیق کا انتظار کریں۔', again: 'نیا آرڈر شروع کریں', empty: 'مینو ابھی دستیاب نہیں۔',
-    add: 'شامل کریں', all: 'سب', table: 'ٹیبل', loading: 'مینو لوڈ ہو رہا ہے', failed: 'مینو لوڈ نہیں ہو سکا۔ کنکشن چیک کریں۔', sending: 'بھیجا جا رہا ہے',
+    add: 'شامل کریں', all: 'سب', loading: 'مینو لوڈ ہو رہا ہے', failed: 'مینو لوڈ نہیں ہو سکا۔ کنکشن چیک کریں۔', sending: 'بھیجا جا رہا ہے',
     pending: 'کیشیئر کا انتظار', claimed: 'کیشیئر آپ کا آرڈر تیار کر رہا ہے', completed: 'آپ کے آرڈر کی تصدیق ہو گئی', cancelled: 'یہ آرڈر منسوخ ہو گیا',
-    tableField: 'ٹیبل نمبر (اختیاری)', currency: 'Rs',
+    tableField: 'ٹیبل نمبر (اختیاری)', readOnly: 'صرف دیکھنے کے لیے۔ آرڈر کے لیے اپنے ٹیبل پر موجود کیو آر کوڈ اسکین کریں۔',
+    notFound: 'یہ مینو لنک درست نہیں۔', currency: 'Rs',
   },
 };
 
@@ -26,6 +29,7 @@ let lang = localStorage.getItem('lh.lang') === 'ur' ? 'ur' : 'en';
 let categories = [];
 let items = [];
 let variants = [];
+let canOrder = false;
 let settings = { restaurant_name: 'Lagman House', restaurant_name_ur: '', currency_symbol: 'Rs' };
 let activeCategory = 'all';
 const cart = new Map();
@@ -43,6 +47,7 @@ function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n)));
   $('restaurantName').textContent = restaurantName();
   document.title = `${restaurantName()} Menu`;
+  if (!canOrder && items.length) showStatus(t('readOnly'));
   renderCategories();
   renderMenu();
   renderCart();
@@ -58,20 +63,21 @@ function showStatus(text, error = false) {
 async function load() {
   showStatus(t('loading'));
   try {
-    const [cat, mi, va, st] = await Promise.all([
-      supabase.from('categories').select('*').eq('is_active', true).is('deleted_at', null).order('sort_order'),
-      supabase.from('menu_items').select('*').eq('is_active', true).is('deleted_at', null).order('sort_order'),
-      supabase.from('menu_item_variants').select('*').is('deleted_at', null).order('sort_order'),
-      supabase.from('settings').select('*'),
-    ]);
-    if (cat.error || mi.error || va.error) throw cat.error || mi.error || va.error;
-    categories = cat.data || [];
-    items = mi.data || [];
-    variants = va.data || [];
-    for (const row of st.data || []) if (typeof row.value === 'string') settings[row.key] = row.value;
+    const { data, error } = await supabase.rpc('public_menu', { p_token: menuToken });
+    if (error) throw error;
+    if (!data || !data.found) {
+      showStatus(t('notFound'), true);
+      $('empty').classList.remove('hidden');
+      return;
+    }
+    canOrder = !!data.can_order;
+    categories = data.categories || [];
+    items = data.items || [];
+    variants = data.variants || [];
+    for (const [k, v] of Object.entries(data.settings || {})) if (typeof v === 'string') settings[k] = v;
     $('restaurantName').textContent = restaurantName();
     document.title = `${restaurantName()} Menu`;
-    showStatus('');
+    showStatus(canOrder ? '' : t('readOnly'));
     $('empty').classList.toggle('hidden', items.length > 0);
     renderCategories();
     renderMenu();
@@ -111,13 +117,17 @@ function renderMenu() {
     const media = item.image_url ? `<img src="${item.image_url}" alt="" loading="lazy" />` : `<div class="ph">${(item.name[0] || '').toUpperCase()}</div>`;
     const priceText = item.has_variants ? (vs.length ? `${money(Math.min(...vs.map((v) => v.price)))}+` : '') : money(item.base_price);
     const select = item.has_variants && vs.length ? `<select>${vs.map((v) => `<option value="${v.id}">${v.name} - ${money(v.price)}</option>`).join('')}</select>` : '';
-    card.innerHTML = `${media}<div class="body"><div class="name">${name(item)}</div>${item.description ? `<div class="desc">${item.description}</div>` : ''}<div class="price">${priceText}</div><div class="row">${select}<button class="add primary" type="button">${t('add')}</button></div></div>`;
-    card.querySelector('.add').onclick = () => {
-      const sel = card.querySelector('select');
-      const variant = sel ? vs.find((v) => v.id === sel.value) : null;
-      if (item.has_variants && !variant) return;
-      addToCart(item, variant);
-    };
+    const addBtn = canOrder ? `<button class="add primary" type="button">${t('add')}</button>` : '';
+    card.innerHTML = `${media}<div class="body"><div class="name">${name(item)}</div>${item.description ? `<div class="desc">${item.description}</div>` : ''}<div class="price">${priceText}</div><div class="row">${select}${addBtn}</div></div>`;
+    const btn = card.querySelector('.add');
+    if (btn) {
+      btn.onclick = () => {
+        const sel = card.querySelector('select');
+        const variant = sel ? vs.find((v) => v.id === sel.value) : null;
+        if (item.has_variants && !variant) return;
+        addToCart(item, variant);
+      };
+    }
     grid.appendChild(card);
   }
 }
@@ -139,7 +149,7 @@ function cartTotal() {
 function renderCart() {
   let count = 0;
   for (const l of cart.values()) count += l.quantity;
-  $('cartBar').classList.toggle('hidden', count === 0);
+  $('cartBar').classList.toggle('hidden', count === 0 || !canOrder);
   $('cartCount').textContent = String(count);
   $('cartTotal').textContent = money(cartTotal());
   $('sheetTotal').textContent = money(cartTotal());
@@ -160,18 +170,17 @@ function renderCart() {
 }
 
 async function submit() {
-  if (cart.size === 0) return;
+  if (cart.size === 0 || !canOrder || !menuToken) return;
   const btn = $('submitBtn');
   btn.disabled = true;
   btn.textContent = t('sending');
-  const payload = {
-    table_code: $('tableInput').value.trim().toUpperCase() || null,
-    customer_name: $('customerName').value.trim() || null,
-    note: $('note').value.trim() || null,
-    items: [...cart.values()],
-    status: 'pending',
-  };
-  const { data, error } = await supabase.from('customer_orders').insert(payload).select('id').single();
+  const { data, error } = await supabase.rpc('place_customer_order', {
+    p_token: menuToken,
+    p_items: [...cart.values()].map((l) => ({ menu_item_id: l.menu_item_id, variant_id: l.variant_id, quantity: l.quantity })),
+    p_table: $('tableInput').value.trim() || null,
+    p_name: $('customerName').value.trim() || null,
+    p_note: $('note').value.trim() || null,
+  });
   btn.disabled = false;
   btn.textContent = t('send');
   if (error) {
@@ -183,19 +192,19 @@ async function submit() {
   renderCart();
   $('sheet').classList.add('hidden');
   $('done').classList.remove('hidden');
-  watchOrder(data.id);
+  watchOrder(data);
 }
 
-let channel = null;
+let pollTimer = null;
 function watchOrder(id) {
   $('doneStatus').textContent = t('pending');
-  if (channel) supabase.removeChannel(channel);
-  channel = supabase
-    .channel(`co:${id}`)
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customer_orders', filter: `id=eq.${id}` }, (p) => {
-      $('doneStatus').textContent = t(p.new.status) || p.new.status;
-    })
-    .subscribe();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const { data } = await supabase.rpc('customer_order_status', { p_order_id: id });
+    if (!data) return;
+    $('doneStatus').textContent = t(data) || data;
+    if (data === 'completed' || data === 'cancelled') clearInterval(pollTimer);
+  }, 5000);
 }
 
 $('langBtn').onclick = () => {
@@ -209,7 +218,7 @@ $('sheet').onclick = (e) => { if (e.target === $('sheet')) $('sheet').classList.
 $('submitBtn').onclick = submit;
 $('againBtn').onclick = () => {
   $('done').classList.add('hidden');
-  if (channel) supabase.removeChannel(channel);
+  if (pollTimer) clearInterval(pollTimer);
 };
 
 applyLang();

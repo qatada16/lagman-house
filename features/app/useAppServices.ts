@@ -48,7 +48,7 @@ export function useAppServices() {
       registeredFor.current = profile.id;
       void registerForPush(profile.id, profile.push_token);
     }
-    if (profile.role === 'cashier' && profile.status === 'active') void useCustomerOrderStore.getState().start();
+    if (profile.role === 'cashier' && profile.status === 'active' && profile.admin_id) void useCustomerOrderStore.getState().start(profile.admin_id);
     else useCustomerOrderStore.getState().stop();
   }, [status, profile?.id, profile?.role, profile?.status]);
 

@@ -1,5 +1,6 @@
 import { all, get, nowIso, run, transaction, upsert } from '@/lib/db';
 import { newId } from '@/lib/device';
+import { getTenantId, requireTenantId } from '@/lib/tenant';
 import type { Category, MenuItem, MenuItemVariant, StockLink } from '@/lib/types';
 import { requestSync } from '@/features/sync/syncEngine';
 
@@ -8,21 +9,24 @@ type ItemRow = Omit<MenuItem, 'has_variants' | 'is_active'> & { has_variants: nu
 
 const toCategory = (r: CategoryRow): Category => ({ ...r, is_active: !!r.is_active });
 const toItem = (r: ItemRow): MenuItem => ({ ...r, has_variants: !!r.has_variants, is_active: !!r.is_active });
+const tenant = () => getTenantId() ?? '';
 
 export function listCategories(includeInactive = false): Category[] {
   const where = includeInactive ? 'deleted_at IS NULL' : 'deleted_at IS NULL AND is_active = 1';
-  return all<CategoryRow>(`SELECT * FROM categories WHERE ${where} ORDER BY sort_order, name`).map(toCategory);
+  return all<CategoryRow>(`SELECT * FROM categories WHERE admin_id = ? AND ${where} ORDER BY sort_order, name`, [tenant()]).map(toCategory);
 }
 
 export function saveCategory(input: { id?: string; name: string; name_ur?: string | null; sort_order?: number; is_active?: boolean }): Category {
+  const adminId = requireTenantId();
   const now = nowIso();
   const existing = input.id ? get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [input.id]) : null;
   const row = {
     id: input.id ?? newId(),
+    admin_id: adminId,
     name: input.name.trim(),
     name_ur: input.name_ur?.trim() || null,
     sort_order: input.sort_order ?? existing?.sort_order ?? listCategories(true).length,
-    is_active: input.is_active ?? (existing ? !!existing.is_active : true) ? 1 : 0,
+    is_active: (input.is_active ?? (existing ? !!existing.is_active : true)) ? 1 : 0,
     deleted_at: null,
     created_at: existing?.created_at ?? now,
     updated_at: now,
@@ -43,8 +47,8 @@ export function deleteCategory(id: string) {
 }
 
 export function listMenuItems(opts: { activeOnly?: boolean; categoryId?: string | null; search?: string } = {}): MenuItem[] {
-  const clauses = ['deleted_at IS NULL'];
-  const params: (string | number)[] = [];
+  const clauses = ['admin_id = ?', 'deleted_at IS NULL'];
+  const params: (string | number)[] = [tenant()];
   if (opts.activeOnly) clauses.push('is_active = 1');
   if (opts.categoryId) {
     clauses.push('category_id = ?');
@@ -59,7 +63,7 @@ export function listMenuItems(opts: { activeOnly?: boolean; categoryId?: string 
 }
 
 export function getMenuItem(id: string): MenuItem | null {
-  const r = get<ItemRow>('SELECT * FROM menu_items WHERE id = ?', [id]);
+  const r = get<ItemRow>('SELECT * FROM menu_items WHERE id = ? AND admin_id = ?', [id, tenant()]);
   return r ? toItem(r) : null;
 }
 
@@ -68,7 +72,7 @@ export function listVariants(itemId: string): MenuItemVariant[] {
 }
 
 export function listAllVariants(): MenuItemVariant[] {
-  return all<MenuItemVariant>('SELECT * FROM menu_item_variants WHERE deleted_at IS NULL ORDER BY sort_order, price');
+  return all<MenuItemVariant>('SELECT * FROM menu_item_variants WHERE admin_id = ? AND deleted_at IS NULL ORDER BY sort_order, price', [tenant()]);
 }
 
 export function listStockLinks(itemId: string): StockLink[] {
@@ -103,11 +107,13 @@ export function saveMenuItem(
   variants: VariantInput[],
   links: StockLinkInput[]
 ): MenuItem {
+  const adminId = requireTenantId();
   const now = nowIso();
   const id = input.id ?? newId();
   const existing = input.id ? get<ItemRow>('SELECT * FROM menu_items WHERE id = ?', [input.id]) : null;
   const row = {
     id,
+    admin_id: adminId,
     category_id: input.category_id,
     name: input.name.trim(),
     name_ur: input.name_ur?.trim() || null,
@@ -134,6 +140,7 @@ export function saveMenuItem(
         const prior = get<MenuItemVariant>('SELECT * FROM menu_item_variants WHERE id = ?', [vid]);
         upsert('menu_item_variants', {
           id: vid,
+          admin_id: adminId,
           menu_item_id: id,
           name: v.name.trim(),
           price: v.price,
@@ -145,11 +152,8 @@ export function saveMenuItem(
         });
       });
     }
-    const current = all<{ id: string }>('SELECT id FROM menu_item_variants WHERE menu_item_id = ? AND deleted_at IS NULL', [id]);
-    for (const v of current) {
-      if (!keepVariantIds.has(v.id)) {
-        run('UPDATE menu_item_variants SET deleted_at = ?, updated_at = ?, is_dirty = 1 WHERE id = ?', [now, now, v.id]);
-      }
+    for (const v of all<{ id: string }>('SELECT id FROM menu_item_variants WHERE menu_item_id = ? AND deleted_at IS NULL', [id])) {
+      if (!keepVariantIds.has(v.id)) run('UPDATE menu_item_variants SET deleted_at = ?, updated_at = ?, is_dirty = 1 WHERE id = ?', [now, now, v.id]);
     }
 
     const keepLinkIds = new Set<string>();
@@ -161,6 +165,7 @@ export function saveMenuItem(
       const prior = get<StockLink>('SELECT * FROM stock_links WHERE id = ?', [lid]);
       upsert('stock_links', {
         id: lid,
+        admin_id: adminId,
         menu_item_id: id,
         variant_id: l.variant_id,
         stock_item_id: l.stock_item_id,
@@ -171,8 +176,7 @@ export function saveMenuItem(
         is_dirty: 1,
       });
     }
-    const currentLinks = all<{ id: string }>('SELECT id FROM stock_links WHERE menu_item_id = ? AND deleted_at IS NULL', [id]);
-    for (const l of currentLinks) {
+    for (const l of all<{ id: string }>('SELECT id FROM stock_links WHERE menu_item_id = ? AND deleted_at IS NULL', [id])) {
       if (!keepLinkIds.has(l.id)) run('UPDATE stock_links SET deleted_at = ?, updated_at = ?, is_dirty = 1 WHERE id = ?', [now, now, l.id]);
     }
   });

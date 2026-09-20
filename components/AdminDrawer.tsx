@@ -30,6 +30,7 @@ export const ADMIN_ITEMS: Item[] = [
   { key: 'navCashiers', icon: 'users', href: '/(admin)/cashiers', match: (p) => p.startsWith('/cashiers') },
   { key: 'navMenu', icon: 'book-open', href: '/(admin)/menu', match: (p) => p.startsWith('/menu') },
   { key: 'navStock', icon: 'package', href: '/(admin)/stock', match: (p) => p.startsWith('/stock') },
+  { key: 'navExpenses', icon: 'credit-card', href: '/(admin)/expenses', match: (p) => p.startsWith('/expenses') },
   { key: 'navTemplates', icon: 'file-text', href: '/(admin)/templates', match: (p) => p.startsWith('/templates') },
   { key: 'navPrinter', icon: 'printer', href: '/(admin)/printer', match: (p) => p.startsWith('/printer') },
   { key: 'navHistory', icon: 'bar-chart-2', href: '/(admin)/history', match: (p) => p.startsWith('/history') },

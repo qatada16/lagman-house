@@ -15,6 +15,8 @@ export interface Profile {
   push_token: string | null;
   language: Language;
   admin_id: string | null;
+  menu_token: string | null;
+  menu_is_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +29,7 @@ export interface AdminSummary {
 
 export interface Category {
   id: string;
+  admin_id: string;
   name: string;
   name_ur: string | null;
   sort_order: number;
@@ -38,6 +41,7 @@ export interface Category {
 
 export interface MenuItem {
   id: string;
+  admin_id: string;
   category_id: string | null;
   name: string;
   name_ur: string | null;
@@ -54,6 +58,7 @@ export interface MenuItem {
 
 export interface MenuItemVariant {
   id: string;
+  admin_id: string;
   menu_item_id: string;
   name: string;
   price: number;
@@ -65,6 +70,7 @@ export interface MenuItemVariant {
 
 export interface StockItem {
   id: string;
+  admin_id: string;
   name: string;
   unit: string;
   quantity: number;
@@ -76,20 +82,11 @@ export interface StockItem {
 
 export interface StockLink {
   id: string;
+  admin_id: string;
   menu_item_id: string;
   variant_id: string | null;
   stock_item_id: string;
   quantity_per_unit: number;
-  deleted_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface QrTable {
-  id: string;
-  code: string;
-  label: string;
-  is_active: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -136,6 +133,7 @@ export interface ReceiptTemplateConfig {
 
 export interface ReceiptTemplate {
   id: string;
+  admin_id: string;
   name: string;
   is_active: boolean;
   sort_order: number;
@@ -170,6 +168,7 @@ export interface Order {
 export interface OrderItem {
   id: string;
   order_id: string;
+  admin_id: string | null;
   menu_item_id: string | null;
   variant_id: string | null;
   item_name: string;
@@ -192,6 +191,7 @@ export interface CustomerOrderItem {
 
 export interface CustomerOrder {
   id: string;
+  admin_id: string;
   table_code: string | null;
   customer_name: string | null;
   items: CustomerOrderItem[];
@@ -220,4 +220,37 @@ export interface RestaurantSettings {
   restaurant_address: string;
   currency_symbol: string;
   logo_url: string;
+}
+
+export type ExpenseSource = 'manual' | 'stock';
+
+export interface Expense {
+  id: string;
+  admin_id: string;
+  title: string;
+  amount: number;
+  category: string;
+  occurred_at: string;
+  note: string | null;
+  source: ExpenseSource;
+  stock_purchase_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockPurchase {
+  id: string;
+  admin_id: string;
+  stock_item_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  supplier: string | null;
+  note: string | null;
+  purchased_at: string;
+  expense_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '@/store/authStore';
 import { usePrinterStore } from '@/store/printerStore';
 import { useCustomerOrderStore } from '@/store/customerOrderStore';
@@ -8,6 +9,7 @@ import { runSync } from '@/features/sync/syncEngine';
 import { addNotificationListeners, registerForPush } from '@/features/notifications/push';
 import { toast } from '@/store/toastStore';
 import { translate } from '@/lib/i18n';
+import { sessionFromUrl } from '@/features/auth/authApi';
 import { useLanguageStore } from '@/store/languageStore';
 
 // Starts background services once the user is signed in; tears them down on sign-out.
@@ -19,6 +21,19 @@ export function useAppServices() {
 
   useEffect(() => {
     usePrinterStore.getState().init();
+  }, []);
+
+  useEffect(() => {
+    const handle = async (url: string | null) => {
+      if (!url) return;
+      const result = await sessionFromUrl(url);
+      const lang = useLanguageStore.getState().lang;
+      if (result === 'error') toast.error(translate(lang, 'wrongCode'));
+      if (result === 'session') toast.success(translate(lang, 'emailConfirmed'));
+    };
+    Linking.getInitialURL().then(handle).catch(() => undefined);
+    const sub = Linking.addEventListener('url', (e) => void handle(e.url));
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

@@ -14,11 +14,13 @@ interface AuthState {
   session: Session | null;
   profile: Profile | null;
   pendingPhotoUri: string | null;
+  pendingCredentials: { email: string; password: string } | null;
   init: () => Promise<void>;
   applySession: (session: Session | null) => Promise<void>;
   refreshProfile: () => Promise<Profile | null>;
   setProfile: (p: Profile) => void;
   setPendingPhoto: (uri: string | null) => void;
+  setPendingCredentials: (c: { email: string; password: string } | null) => void;
   signOut: () => Promise<void>;
 }
 
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   session: null,
   profile: null,
   pendingPhotoUri: null,
+  pendingCredentials: null,
 
   init: async () => {
     initDb();
@@ -126,6 +129,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   },
 
   setPendingPhoto: (uri) => set({ pendingPhotoUri: uri }),
+  setPendingCredentials: (c) => set({ pendingCredentials: c }),
 
   signOut: async () => {
     if (profileChannel) {
@@ -140,6 +144,6 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
     setCurrentUserId(null);
     clearUserData();
     resetSyncState();
-    set({ status: 'signedOut', session: null, profile: null, pendingPhotoUri: null });
+    set({ status: 'signedOut', session: null, profile: null, pendingPhotoUri: null, pendingCredentials: null });
   },
 }));

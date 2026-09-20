@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { cacheProfile } from './profileRepo';
 
 export const PASSWORD_MIN = 8;
+export const EMAIL_REDIRECT = 'lagmanhouse://auth/callback';
 
 export function validatePassword(pw: string) {
   return pw.length >= PASSWORD_MIN && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
@@ -22,21 +23,37 @@ export async function signUp(input: { name: string; email: string; password: str
   const { data, error } = await supabase.auth.signUp({
     email: input.email.trim().toLowerCase(),
     password: input.password,
-    options: { data: { name: input.name.trim(), role: input.role, language: input.language } },
+    options: { emailRedirectTo: EMAIL_REDIRECT, data: { name: input.name.trim(), role: input.role, language: input.language } },
   });
   if (error) throw error;
   return data;
 }
 
-export async function verifyEmailCode(email: string, token: string) {
-  const { data, error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'signup' });
+export async function resendSignupCode(email: string) {
+  const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: EMAIL_REDIRECT } });
   if (error) throw error;
-  return data.session;
 }
 
-export async function resendSignupCode(email: string) {
-  const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
-  if (error) throw error;
+// Handles the redirect from the confirmation email: tokens in the hash (implicit flow) or a PKCE code.
+export async function sessionFromUrl(url: string): Promise<'session' | 'error' | 'ignored'> {
+  if (!url.includes('auth/callback')) return 'ignored';
+  const query = url.split('?')[1]?.split('#')[0] ?? '';
+  const hash = url.split('#')[1] ?? '';
+  const params = new URLSearchParams(hash || query);
+  const queryParams = new URLSearchParams(query);
+  if (params.get('error_description') || queryParams.get('error_description')) return 'error';
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    return error ? 'error' : 'session';
+  }
+  const code = queryParams.get('code');
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return error ? 'error' : 'session';
+  }
+  return 'ignored';
 }
 
 export async function signIn(identifier: string, password: string) {

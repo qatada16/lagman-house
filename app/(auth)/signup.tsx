@@ -43,6 +43,7 @@ export default function SignupScreen() {
     try {
       await signUp({ name, email, password, role, language: lang });
       useAuthStore.getState().setPendingPhoto(photo);
+      useAuthStore.getState().setPendingCredentials({ email: email.trim().toLowerCase(), password });
       router.push({ pathname: '/(auth)/verify-email', params: { email: email.trim().toLowerCase() } });
     } catch (e) {
       setErrors({ form: (e as Error).message });

@@ -23,7 +23,7 @@ export function useAuthGate() {
     if (status === 'loading' || !navReady) return;
     const area = areaFor(status, profile);
     const first = segments[0] as string | undefined;
-    const inAuth = first === '(auth)';
+    const inAuth = first === '(auth)' || first === 'auth';
     const inAdmin = first === '(admin)';
     const inCashier = first === '(cashier)';
     const inPending = first === 'pending';

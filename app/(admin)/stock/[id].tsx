@@ -42,7 +42,10 @@ export default function StockEditScreen() {
     if (threshold !== '' && Number.isNaN(Number(threshold))) next.threshold = t('invalidNumber');
     setErrors(next);
     if (Object.keys(next).length) return;
-    saveStockItem({ id: existing?.id, name, unit, quantity: Number(qty), low_threshold: threshold === '' ? null : Number(threshold) });
+    const cost = Number(pCost);
+    const withPurchase = isNew && Number(qty) > 0 && pCost !== '' && !Number.isNaN(cost) && cost >= 0;
+    const saved = saveStockItem({ id: existing?.id, name, unit, quantity: withPurchase ? 0 : Number(qty), low_threshold: threshold === '' ? null : Number(threshold) });
+    if (withPurchase) recordPurchase({ stockItemId: saved.id, quantity: Number(qty), unitCost: cost, supplier: pSupplier, recordExpense: pExpense });
     toast.success(t('saved'));
     router.back();
   };
@@ -109,6 +112,21 @@ export default function StockEditScreen() {
         <View style={{ height: spacing.md }} />
         <Input label={`${t('lowThreshold')} (${unit})`} value={threshold} onChangeText={setThreshold} decimal error={errors.threshold} hint={t('optional')} />
       </Card>
+
+      {isNew ? (
+        <Card title={t('purchasePrice')}>
+          <AppText variant="small">{t('purchasePriceHint')}</AppText>
+          <View style={{ height: spacing.sm }} />
+          <Input label={`${t('unitCost')} (${currency})`} value={pCost} onChangeText={setPCost} decimal hint={t('optional')} />
+          <View style={{ height: spacing.sm }} />
+          <Input label={t('supplier')} value={pSupplier} onChangeText={setPSupplier} />
+          <View style={[row, { justifyContent: 'space-between', marginTop: spacing.sm }]}>
+            <AppText variant="small">{t('totalCost')}</AppText>
+            <AppText weight="700">{formatMoney(Math.round((Number(qty) || 0) * (Number(pCost) || 0) * 100) / 100, currency)}</AppText>
+          </View>
+          <Toggle label={t('recordAsExpense')} value={pExpense} onChange={setPExpense} disabled={pCost === ''} />
+        </Card>
+      ) : null}
 
       {existing ? (
         <>

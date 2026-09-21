@@ -521,4 +521,6 @@ export const ur: Record<StringKey, string> = {
   expenses30: 'اخراجات (30 دن)',
   net30: 'خالص (30 دن)',
   revenueVsExpenses: 'آمدنی بمقابلہ اخراجات (30 دن)',
+  purchasePrice: 'خریداری کی قیمت',
+  purchasePriceHint: 'اختیاری۔ اوپر دی گئی مقدار کو اس قیمت پر خریداری کے طور پر درج کرتا ہے تاکہ رپورٹس میں نظر آئے۔',
 };

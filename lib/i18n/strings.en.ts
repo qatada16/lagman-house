@@ -519,6 +519,8 @@ export const en = {
   expenses30: 'Expenses (30 days)',
   net30: 'Net (30 days)',
   revenueVsExpenses: 'Revenue vs expenses (30 days)',
+  purchasePrice: 'Purchase price',
+  purchasePriceHint: 'Optional. Records the quantity above as a purchase at this price so it appears in reports.',
 } as const;
 
 export type StringKey = keyof typeof en;

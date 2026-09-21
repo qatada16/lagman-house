@@ -25,7 +25,7 @@ export function Card({ title, right, padded = true, style, tone = 'default', chi
   return (
     <View {...rest} style={[styles.card, { backgroundColor: tones[tone] }, padded ? styles.padded : null, style]}>
       {title || right ? (
-        <View style={[styles.header, row]}>
+        <View style={[styles.header, row, padded ? null : styles.headerUnpadded]}>
           {title ? (
             <AppText variant="heading" color={tone === 'default' ? colors.textPrimary : colors.textOnDark}>
               {title}
@@ -50,4 +50,5 @@ const styles = StyleSheet.create({
   },
   padded: { padding: spacing.lg },
   header: { justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
+  headerUnpadded: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, marginBottom: 0 },
 });

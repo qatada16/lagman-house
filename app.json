@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lagman House",
     "slug": "lagman-house",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "lagmanhouse",
     "orientation": "default",
     "icon": "./assets/icon.png",

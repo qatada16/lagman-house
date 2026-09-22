@@ -11,6 +11,17 @@ CREATE TABLE IF NOT EXISTS kv (
   value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS pending_uploads (
+  id TEXT PRIMARY KEY,
+  bucket TEXT NOT NULL,
+  path TEXT NOT NULL,
+  local_uri TEXT NOT NULL,
+  target_table TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_column TEXT NOT NULL,
+  created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sync_meta (
   table_name TEXT PRIMARY KEY,
   last_synced_at TEXT
@@ -240,10 +251,15 @@ const COLUMN_MIGRATIONS: [string, string, string][] = [
 let initialized = false;
 
 function migrate() {
+  let added = false;
   for (const [table, column, type] of COLUMN_MIGRATIONS) {
     const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
-    if (!cols.some((c) => c.name === column)) db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!cols.some((c) => c.name === column)) {
+      db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      added = true;
+    }
   }
+  if (added) db.execSync('DELETE FROM sync_meta');
   db.execSync('DROP TABLE IF EXISTS settings');
   db.execSync('DROP TABLE IF EXISTS qr_tables');
 }

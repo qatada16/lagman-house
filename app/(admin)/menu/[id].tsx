@@ -9,6 +9,7 @@ import { deleteMenuItem, getMenuItem, listCategories, listStockLinks, listVarian
 import { listStockItems } from '@/features/stock/stockRepo';
 import { pickImage } from '@/features/menu/useImagePick';
 import { uploadImage } from '@/lib/storage';
+import { queueImageUpload } from '@/features/sync/uploads';
 import { confirm } from '@/lib/confirm';
 import { toast } from '@/store/toastStore';
 import { useSyncStore } from '@/store/syncStore';
@@ -87,15 +88,21 @@ export default function MenuItemEditScreen() {
         links.map((l) => ({ id: l.id, variant_id: l.variant_id, stock_item_id: l.stock_item_id, quantity_per_unit: Number(l.qtyText) || 0 }))
       );
       if (localImage) {
+        const remotePath = `menu/${saved.admin_id}/${saved.id}`;
+        let uploaded = false;
         if (online) {
           try {
-            const url = await uploadImage('images', `menu/${saved.admin_id}/${saved.id}`, localImage);
+            const url = await uploadImage('images', remotePath, localImage);
             setMenuItemImage(saved.id, url);
-          } catch (e) {
-            toast.error(`${t('error')}: ${(e as Error).message}`);
+            uploaded = true;
+          } catch {
+            uploaded = false;
           }
-        } else {
-          toast.info(t('imageOfflineHint'));
+        }
+        if (!uploaded) {
+          const localUri = queueImageUpload({ bucket: 'images', path: remotePath, sourceUri: localImage, targetTable: 'menu_items', targetId: saved.id, targetColumn: 'image_url' });
+          setMenuItemImage(saved.id, localUri);
+          toast.info(t('imageQueuedHint'));
         }
       }
       toast.success(t('itemSaved'));

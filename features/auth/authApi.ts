@@ -137,8 +137,9 @@ export async function savePushToken(userId: string, token: string) {
   if (error) throw error;
 }
 
-export function describeAuthError(message: string): 'invalidCredentials' | 'emailNotConfirmed' | 'wrongCode' | 'smsProviderMissing' | 'phoneAlreadyInUse' | 'error' {
+export function describeAuthError(message: string): 'invalidCredentials' | 'emailNotConfirmed' | 'wrongCode' | 'smsProviderMissing' | 'phoneAlreadyInUse' | 'noInternet' | 'error' {
   const m = message.toLowerCase();
+  if (m.includes('network request failed') || m.includes('failed to fetch') || m.includes('fetch failed')) return 'noInternet';
   if (m.includes('invalid login credentials')) return 'invalidCredentials';
   if (m.includes('email not confirmed')) return 'emailNotConfirmed';
   if (m.includes('token has expired') || m.includes('invalid') && m.includes('otp') || m.includes('token')) return 'wrongCode';

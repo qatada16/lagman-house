@@ -71,7 +71,13 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
       });
     }
 
+    const fallback = cached
+      ? null
+      : setTimeout(() => {
+          if (useAuthStore.getState().status === 'loading') set({ status: 'signedOut' });
+        }, 2500);
     const { data, error } = await supabase.auth.getSession();
+    if (fallback) clearTimeout(fallback);
     if (data.session) {
       await getState().applySession(data.session);
     } else if (!error && !cached) {

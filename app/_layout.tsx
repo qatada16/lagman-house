@@ -23,8 +23,8 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       await useLanguageStore.getState().hydrate();
-      await useAuthStore.getState().init();
       setBooted(true);
+      await useAuthStore.getState().init();
     })().catch((e) => {
       console.warn('[boot] failed', e);
       setBooted(true);

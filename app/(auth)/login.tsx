@@ -6,6 +6,8 @@ import { AppText, Button, Input } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
 import { describeAuthError, signIn } from '@/features/auth/authApi';
+import { useSyncStore } from '@/store/syncStore';
+import NetInfo from '@react-native-community/netinfo';
 
 export default function LoginScreen() {
   const t = useT();
@@ -15,10 +17,16 @@ export default function LoginScreen() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const online = useSyncStore((s) => s.online);
 
   const submit = async () => {
     if (!identifier.trim() || !password) {
       setError(t('fieldRequired'));
+      return;
+    }
+    const net = await NetInfo.fetch();
+    if (!net.isConnected || net.isInternetReachable === false) {
+      setError(t('noInternet'));
       return;
     }
     setLoading(true);
@@ -27,7 +35,7 @@ export default function LoginScreen() {
       await signIn(identifier, password);
     } catch (e) {
       const kind = describeAuthError((e as Error).message);
-      setError(kind === 'error' ? `${t('loginFailed')}: ${(e as Error).message}` : t(kind));
+      setError(kind === 'noInternet' ? t('noInternet') : kind === 'error' ? `${t('loginFailed')}: ${(e as Error).message}` : t(kind));
     } finally {
       setLoading(false);
     }
@@ -66,7 +74,7 @@ export default function LoginScreen() {
           {error}
         </AppText>
       ) : null}
-      <Button title={t('login')} onPress={submit} loading={loading} size="lg" />
+      <Button title={online ? t('login') : t('noInternet')} onPress={submit} loading={loading} size="lg" disabled={!online} />
       <View style={[row, { gap: spacing.xs, justifyContent: 'center', marginTop: spacing.sm }]}>
         <AppText variant="small">{t('noAccount')}</AppText>
         <Link href="/(auth)/signup" asChild>

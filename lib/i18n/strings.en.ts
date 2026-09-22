@@ -520,6 +520,8 @@ export const en = {
   net30: 'Net (30 days)',
   revenueVsExpenses: 'Revenue vs expenses (30 days)',
   purchasePrice: 'Purchase price',
+  noInternet: 'No internet connection',
+  imageQueuedHint: 'Image saved on this device. It uploads automatically when you are back online.',
   purchasePriceHint: 'Optional. Records the quantity above as a purchase at this price so it appears in reports.',
 } as const;
 

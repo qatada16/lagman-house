@@ -42,6 +42,10 @@ export function toServer(t: SyncTable, row: Row): Row {
     delete out.menu_token;
     delete out.menu_is_default;
   }
+  if ((t.name === 'menu_items' && typeof out.image_url === 'string' && out.image_url.startsWith('file:')) || (t.name === 'profiles' && typeof out.photo_url === 'string' && out.photo_url.startsWith('file:'))) {
+    if (t.name === 'menu_items') out.image_url = null;
+    else out.photo_url = null;
+  }
   return out;
 }
 

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { all, get, kvGet, kvSet, nowIso, run, upsert } from '@/lib/db';
 import { useSyncStore } from '@/store/syncStore';
 import { SYNC_TABLES, fromServer, toServer, type SyncTable } from './tables';
+import { hasPendingUpload, processPendingUploads } from './uploads';
 
 const EPOCH = '1970-01-01T00:00:00.000Z';
 const PAGE = 500;
@@ -60,7 +61,9 @@ async function pullTable(t: SyncTable): Promise<number> {
       const id = row.id as string;
       const local = get<{ is_dirty: number }>(`SELECT is_dirty FROM ${t.name} WHERE id = ?`, [id]);
       if (local?.is_dirty) continue; // local edit wins until it is pushed
-      upsert(t.name, fromServer(t, row));
+      const incoming = fromServer(t, row);
+      if (t.name === 'menu_items' && hasPendingUpload('menu_items', id, 'image_url')) delete incoming.image_url;
+      upsert(t.name, incoming);
       pulled++;
       const u = row.updated_at as string;
       if (u > maxUpdated) maxUpdated = u;
@@ -159,6 +162,8 @@ export async function runSync(reason = 'manual'): Promise<SyncResult> {
       if (aborted) throw new Error('aborted');
       pulled += await pullTable(t);
     }
+    if (aborted) throw new Error('aborted');
+    await processPendingUploads();
     for (const t of SYNC_TABLES) {
       if (aborted) throw new Error('aborted');
       pushed += await pushTable(t);

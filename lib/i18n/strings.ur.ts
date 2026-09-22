@@ -522,5 +522,7 @@ export const ur: Record<StringKey, string> = {
   net30: 'خالص (30 دن)',
   revenueVsExpenses: 'آمدنی بمقابلہ اخراجات (30 دن)',
   purchasePrice: 'خریداری کی قیمت',
+  noInternet: 'انٹرنیٹ کنکشن نہیں',
+  imageQueuedHint: 'تصویر اس ڈیوائس پر محفوظ ہے۔ آن لائن ہونے پر خود بخود اپ لوڈ ہو جائے گی۔',
   purchasePriceHint: 'اختیاری۔ اوپر دی گئی مقدار کو اس قیمت پر خریداری کے طور پر درج کرتا ہے تاکہ رپورٹس میں نظر آئے۔',
 };

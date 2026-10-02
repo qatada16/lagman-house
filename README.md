@@ -89,6 +89,19 @@ npm run build:aab     # only if publishing through Google Play
 
 Uninstall the development client before installing a release APK; both use the package `com.lagmanhouse.pos`.
 
+### Distribution, Play Protect and iOS
+
+- Test Play Protect behaviour with `npm run build:prod`, never the development client. Dev builds are
+  debuggable, which Play Protect treats as higher risk.
+- The manifest only requests what the app uses: Bluetooth, network, notifications and the background sync
+  wakeups. Microphone, camera, overlay and storage permissions are blocked in `app.json`, and Android backup
+  is disabled so local orders and the session are never copied to a cloud backup.
+- A sideloaded APK signed by a new key has no reputation, so Play Protect may still warn on first install.
+  The lasting fix is distributing through Google Play (an internal testing track is enough), or submitting
+  the APK to Google for Play Protect review.
+- iOS is not a build target. Budget thermal printers use Bluetooth Classic, which iOS does not allow third-party
+  apps to use, and installing on iPhones needs an Apple Developer account.
+
 ## Public menu
 
 `web/` is a static site. Host it anywhere (see `web/README.md`) and set `EXPO_PUBLIC_PUBLIC_MENU_URL`

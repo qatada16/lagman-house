@@ -1,0 +1,77 @@
+diff --git a/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/discovery/BluetoothDiscovery.kt b/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/discovery/BluetoothDiscovery.kt
+index a22c5dc..e6b7572 100644
+--- a/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/discovery/BluetoothDiscovery.kt
++++ b/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/discovery/BluetoothDiscovery.kt
+@@ -89,6 +89,14 @@ class BluetoothDiscovery(private val reactContext: ReactApplicationContext) {
+                     }
+                     obj.put("deviceType", deviceType)
+                     obj.put("isSupported", true) // Android supports all paired devices
++                    try {
++                        val btClass = device.bluetoothClass
++                        obj.put("majorClass", btClass?.majorDeviceClass ?: -1)
++                        obj.put("deviceClass", btClass?.deviceClass ?: -1)
++                    } catch (e: Exception) {
++                        obj.put("majorClass", -1)
++                        obj.put("deviceClass", -1)
++                    }
+ 
+                     pairedDevices.put(obj)
+                 } catch (e: Exception) {
+@@ -238,6 +246,14 @@ class BluetoothDiscovery(private val reactContext: ReactApplicationContext) {
+                 else -> "unknown"
+             }
+             deviceFound.put("deviceType", deviceType)
++            try {
++                val btClass = device.bluetoothClass
++                deviceFound.put("majorClass", btClass?.majorDeviceClass ?: -1)
++                deviceFound.put("deviceClass", btClass?.deviceClass ?: -1)
++            } catch (e: Exception) {
++                deviceFound.put("majorClass", -1)
++                deviceFound.put("deviceClass", -1)
++            }
+ 
+             // Android supports most devices
+             deviceFound.put("isSupported", true)
+diff --git a/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/printing/PrintConnection.kt b/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/printing/PrintConnection.kt
+index c8f5f58..67061ec 100644
+--- a/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/printing/PrintConnection.kt
++++ b/node_modules/@finan-me/react-native-thermal-printer/android/src/main/java/com/rnthermalprinter/printing/PrintConnection.kt
+@@ -144,6 +144,20 @@ class BluetoothPrintConnection(
+                     } catch (fallbackError: Exception) {
+                         Log.w(TAG, "Fallback also failed: ${fallbackError.message}")
+                     }
++                    try {
++                        socket?.close()
++                        val adapter = BluetoothAdapter.getDefaultAdapter()
++                        val device = adapter.getRemoteDevice(macAddress)
++                        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
++                        socket = method.invoke(device, 1) as BluetoothSocket
++                        socket?.connect()
++                        if (socket?.isConnected == true) {
++                            Log.d(TAG, "[Native:Android] BluetoothPrintConnection.connect - SUCCESS: Connected on channel 1")
++                            return@withContext true
++                        }
++                    } catch (channelError: Exception) {
++                        Log.w(TAG, "Channel 1 fallback failed: ${channelError.message}")
++                    }
+                 }
+ 
+                 if (attempt < maxRetries - 1) {
+@@ -165,9 +179,14 @@ class BluetoothPrintConnection(
+             val output = socket?.outputStream ?: throw IOException("Output stream not available")
+             val startMs = System.currentTimeMillis()
+ 
+-            // Send all data at once like LAN - let printer handle buffering
+-            output.write(data)
+-            output.flush()
++            var offset = 0
++            while (offset < data.size) {
++                val end = minOf(offset + CHUNK_SIZE_BYTES, data.size)
++                output.write(data, offset, end - offset)
++                output.flush()
++                offset = end
++                if (offset < data.size) delay(CHUNK_DELAY_MS)
++            }
+ 
+             val elapsed = System.currentTimeMillis() - startMs
+             Log.d(TAG, "[Native:Android] BluetoothPrintConnection.send - SUCCESS: ${data.size} bytes to $macAddress in ${elapsed}ms")

@@ -31,7 +31,9 @@ web/                 static public menu page (QR ordering)
    Both are safe to re-run.
 3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
    Email verification uses Supabase's default confirmation link, which deep-links back into the app.
-4. `npm install`
+4. `npm install`. A `postinstall` step runs `patch-package`, which applies the fixes in `patches/` to the
+   Bluetooth printer library (extra connection fallbacks, chunked sends, device class for printer detection).
+   EAS builds run the same step, so never delete the `patches/` folder.
 
 ## Accounts and tenants
 
@@ -109,4 +111,8 @@ invalidates old QR prints. Customers type their table number as a hint.
   item-wise and cashier-wise sortable tables, revenue charts, and CSV export through the Android share sheet.
 - Anonymous web visitors have no table access at all; they only call `public_menu`, `place_customer_order`
   and `customer_order_status`.
+- Printer pairing: pair the printer once in Android Bluetooth settings. Scan for printers lists paired devices
+  in a picker, highlights likely printers by Bluetooth class and name, and remembers the last connected one.
+  Connecting opens a persistent socket (secure SPP, then insecure, then channel 1), the same fallbacks common
+  printer apps use.
 - Language switches instantly through a string dictionary and per-component RTL layout, not `I18nManager`.

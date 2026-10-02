@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { AppText, Badge, Button, Card, EmptyState, ListRow, Select } from '@/components/ui';
+import { AppText, Badge, Button, Card, Select } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
-import { usePrinterStore, type PrinterDevice } from '@/store/printerStore';
+import { usePrinterStore } from '@/store/printerStore';
+import { PrinterPickerSheet } from './PrinterPickerSheet';
+import { relativeTime } from '@/lib/format';
 import { usePrint, testSlipNodes } from './usePrint';
 import { listMenuItems, listVariants } from '@/features/menu/menuRepo';
 import { listTemplates } from '@/features/receipts/templateRepo';
@@ -29,9 +31,14 @@ export function PrinterPanel({ showSamplePrint = true }: { showSamplePrint?: boo
   const variants = useMemo(() => (item?.has_variants ? listVariants(item.id) : []), [item]);
   const template = templates.find((x) => x.id === templateId) ?? null;
 
-  const connect = (d: PrinterDevice) => void printer.connect(d);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const statusTone = printer.status === 'connected' ? 'success' : printer.status === 'connecting' ? 'warning' : 'danger';
+
+  const openPicker = () => {
+    setPickerOpen(true);
+    void printer.scan();
+  };
 
   const printSample = () => {
     if (!template) return;
@@ -40,42 +47,28 @@ export function PrinterPanel({ showSamplePrint = true }: { showSamplePrint?: boo
     void printOrder(sample.order, sample.items, template);
   };
 
-  const deviceRow = (d: PrinterDevice) => {
-    const isCurrent = printer.device?.address === d.address;
-    return (
-      <ListRow
-        key={d.address}
-        title={d.name}
-        subtitle={d.address}
-        right={
-          isCurrent ? (
-            <Badge label={t(printer.status)} tone={statusTone} />
-          ) : (
-            <Button title={t('connect')} size="sm" variant="outline" onPress={() => connect(d)} />
-          )
-        }
-        onPress={isCurrent ? undefined : () => connect(d)}
-      />
-    );
-  };
-
   return (
     <View style={{ gap: spacing.lg }}>
       <Card title={t('printerStatus')} right={<Badge label={t(printer.status)} tone={statusTone} />}>
         {printer.device ? (
-          <View style={[row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-            <View>
+          <View style={[row, { justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }]}>
+            <View style={{ flex: 1 }}>
               <AppText weight="600">{printer.device.name}</AppText>
               <AppText variant="small">{printer.device.address}</AppText>
             </View>
             <View style={[row, { gap: spacing.sm }]}>
-              <Button title={t('connect')} size="sm" variant="secondary" onPress={() => connect(printer.device!)} loading={printer.status === 'connecting'} />
+              <Button title={printer.status === 'connected' ? t('reconnect') : t('connect')} size="sm" variant="secondary" onPress={() => void printer.connect(printer.device!)} loading={printer.status === 'connecting'} />
               <Button title={t('forgetPrinter')} size="sm" variant="ghost" onPress={() => void printer.forget()} />
             </View>
           </View>
         ) : (
           <AppText variant="small">{t('printerNotConnected')}</AppText>
         )}
+        {printer.lastConnected ? (
+          <AppText variant="small" style={{ marginTop: spacing.sm }}>
+            {t('lastConnectedTo', { name: printer.lastConnected.name, time: relativeTime(printer.lastConnected.at, t('never')) })}
+          </AppText>
+        ) : null}
         {!printer.bluetoothOn ? (
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
             <AppText color={colors.danger}>{t('bluetoothOff')}</AppText>
@@ -93,32 +86,12 @@ export function PrinterPanel({ showSamplePrint = true }: { showSamplePrint?: boo
           </AppText>
         ) : null}
         <View style={[row, { gap: spacing.sm, marginTop: spacing.md }]}>
-          <Button title={printer.scanning ? t('scanning') : t('scan')} icon="bluetooth" onPress={() => void printer.scan()} loading={printer.scanning} style={{ flex: 1 }} />
+          <Button title={t('scan')} icon="bluetooth" onPress={openPicker} style={{ flex: 1 }} />
           <Button title={t('printTestSlip')} variant="action" icon="printer" disabled={!printer.device} loading={printing} onPress={() => void printRaw(testSlipNodes(getSettings().restaurant_name), template?.config.paperWidthMm ?? 58)} />
         </View>
       </Card>
 
-      {(printer.paired.length > 0 || printer.found.length > 0) && (
-        <Card padded={false}>
-          <View style={{ padding: spacing.md, paddingBottom: 0 }}>
-            <AppText variant="label" style={{ textTransform: 'uppercase' }}>
-              {t('pairedDevices')}
-            </AppText>
-          </View>
-          {printer.paired.length === 0 ? <EmptyState title={t('noDevices')} icon="bluetooth" /> : printer.paired.map(deviceRow)}
-          {printer.found.length > 0 ? (
-            <>
-              <View style={{ padding: spacing.md, paddingBottom: 0 }}>
-                <AppText variant="label" style={{ textTransform: 'uppercase' }}>
-                  {t('foundDevices')}
-                </AppText>
-              </View>
-              {printer.found.map(deviceRow)}
-            </>
-          ) : null}
-        </Card>
-      )}
-      {!printer.scanning && printer.paired.length === 0 && printer.found.length === 0 && printer.permission !== false ? <AppText variant="small">{t('noDevices')}</AppText> : null}
+      <PrinterPickerSheet visible={pickerOpen} onClose={() => setPickerOpen(false)} />
 
       {showSamplePrint ? (
         <Card title={t('printItemReceipt')}>

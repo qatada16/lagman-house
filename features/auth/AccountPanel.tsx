@@ -79,7 +79,7 @@ export function AccountPanel() {
     setBusy(true);
     try {
       await deleteOwnAccount();
-      await signOut();
+      await signOut({ forget: true });
     } catch (e) {
       toast.error(`${t('deleteAccountFailed')}: ${(e as Error).message}`);
     } finally {

@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { Asset } from 'expo-asset';
 import type { Order, OrderItem, ReceiptTemplate } from '@/lib/types';
-import { buildReceiptNodes, type ReceiptNode } from '@/features/receipts/render';
+import { buildReceiptNodes, layoutToNodes, testSlipLayout, type ReceiptNode } from '@/features/receipts/render';
+import type { ReceiptTextSize } from '@/lib/types';
 import { getSettings } from '@/features/settings/settingsRepo';
 import { usePrinterStore } from '@/store/printerStore';
 import { useAuthStore } from '@/store/authStore';
@@ -74,17 +75,6 @@ export function usePrint() {
   return { printOrder, printRaw, printing, hasPrinter: !!device };
 }
 
-export function testSlipNodes(restaurantName: string): ReceiptNode[] {
-  return [
-    { type: 'text', content: restaurantName, style: { align: 'center', bold: true, size: 2 } },
-    { type: 'text', content: 'Printer test', style: { align: 'center' } },
-    { type: 'line' },
-    { type: 'columns', columns: [{ content: 'Left column', width: 50 }, { content: 'Right', width: 50, align: 'right' }] },
-    { type: 'text', content: '0123456789 ABCDEFGHIJ abcdefghij' },
-    { type: 'text', content: 'Bold line', style: { bold: true } },
-    { type: 'line', style: 'dashed' },
-    { type: 'text', content: new Date().toLocaleString(), style: { align: 'center' } },
-    { type: 'feed', lines: 3 },
-    { type: 'cut' },
-  ];
+export function testSlipNodes(restaurantName: string, paperWidthMm: 58 | 80, textSize: ReceiptTextSize, charsPerLine: number | null): ReceiptNode[] {
+  return layoutToNodes(testSlipLayout(restaurantName, paperWidthMm, textSize, charsPerLine));
 }

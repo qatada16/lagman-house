@@ -1,15 +1,12 @@
-import type { MenuItem, MenuItemVariant, Order, OrderItem, ReceiptTemplate, ReceiptTemplateConfig, RestaurantSettings } from '@/lib/types';
-import { formatDate, formatDateTime, formatMoney, formatTime, pad, shortId } from '@/lib/format';
+import type { MenuItem, MenuItemVariant, Order, OrderItem, ReceiptTemplate, ReceiptTemplateConfig, ReceiptTextSize, RestaurantSettings } from '@/lib/types';
+import { formatDate, formatDateTime, formatTime, pad, shortId } from '@/lib/format';
 
 type Align = 'left' | 'center' | 'right';
-type Font = 'A' | 'B';
 
-// Subset of the printer library's document nodes; structurally compatible with its PrintJob.
+// Nodes handed to the printer library. Text is sent as raw ESC/POS bytes so the
+// printed layout is exactly the one computed here (and shown in the preview).
 export type ReceiptNode =
-  | { type: 'text'; content: string; style?: { align?: Align; bold?: boolean; size?: 1 | 2; font?: Font } }
-  | { type: 'line'; style?: 'solid' | 'dashed' }
-  | { type: 'columns'; columns: { content: string; width: number; align?: Align }[]; style?: { bold?: boolean; font?: Font } }
-  | { type: 'table'; headers?: string[]; rows: string[][]; columnWidths: number[]; alignments: Align[]; headerStyle?: { bold?: boolean; font?: Font }; cellStyle?: { bold?: boolean; font?: Font } }
+  | { type: 'raw'; data: number[] }
   | { type: 'image'; imagePath: string; options?: { align?: Align; widthPx?: number } }
   | { type: 'feed'; lines: number }
   | { type: 'cut' };
@@ -20,10 +17,29 @@ export interface ReceiptContext {
   logoPath?: string | null;
 }
 
-// Characters per line for common ESC/POS printers.
-export function charsForPaper(paperWidthMm: number, font: Font = 'A') {
-  if (font === 'B') return paperWidthMm === 80 ? 64 : 42;
-  return paperWidthMm === 80 ? 48 : 32;
+export interface ReceiptLine {
+  kind: 'text' | 'rule' | 'logo';
+  text: string;
+  bold?: boolean;
+  big?: boolean;
+  align?: Align;
+}
+
+export interface ReceiptLayout {
+  width: number;
+  textSize: ReceiptTextSize;
+  lines: ReceiptLine[];
+  feedLines: number;
+  cut: boolean;
+}
+
+export function defaultCharsPerLine(paperWidthMm: number, textSize: ReceiptTextSize) {
+  if (textSize === 'large') return paperWidthMm === 80 ? 48 : 32;
+  return paperWidthMm === 80 ? 64 : 42;
+}
+
+export function charsPerLine(cfg: ReceiptTemplateConfig) {
+  return cfg.style.charsPerLine ?? defaultCharsPerLine(cfg.paperWidthMm, cfg.style.textSize);
 }
 
 export function formatOrderNumber(order: Pick<Order, 'id' | 'order_number' | 'created_at'>, cfg: ReceiptTemplateConfig['orderNumber']) {
@@ -47,197 +63,246 @@ function dateText(iso: string, format: ReceiptTemplateConfig['dateTime']['format
   return formatDateTime(iso);
 }
 
-function itemColumns(cfg: ReceiptTemplateConfig['items']) {
-  const cols: { key: 'item' | 'size' | 'qty' | 'price' | 'subtotal'; header: string; weight: number; align: Align }[] = [];
-  cols.push({ key: 'item', header: 'Item', weight: 0, align: 'left' });
-  if (cfg.columns.size && !cfg.sizeInline) cols.push({ key: 'size', header: 'Size', weight: 18, align: 'left' });
-  if (cfg.columns.qty) cols.push({ key: 'qty', header: 'Qty', weight: 11, align: 'center' });
-  if (cfg.columns.price) cols.push({ key: 'price', header: 'Price', weight: 21, align: 'right' });
-  if (cfg.columns.subtotal) cols.push({ key: 'subtotal', header: 'Total', weight: 22, align: 'right' });
-  let fixed = cols.reduce((s, c) => s + c.weight, 0);
-  if (fixed > 68) {
-    const scale = 68 / fixed;
-    for (const c of cols) c.weight = Math.floor(c.weight * scale);
-    fixed = cols.reduce((s, c) => s + c.weight, 0);
+export function num(v: number) {
+  const r = Math.round(v * 100) / 100;
+  return r.toLocaleString('en-US', { minimumFractionDigits: r % 1 ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+export function toAscii(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\x20-\x7E]/g, '?');
+}
+
+function fit(s: string, w: number, align: Align = 'left') {
+  const t = s.length > w ? s.slice(0, w) : s;
+  const gap = w - t.length;
+  if (align === 'right') return ' '.repeat(gap) + t;
+  if (align === 'center') {
+    const l = Math.floor(gap / 2);
+    return ' '.repeat(l) + t + ' '.repeat(gap - l);
   }
-  cols[0].weight = 100 - fixed;
+  return t + ' '.repeat(gap);
+}
+
+function wrapChars(s: string, w: number): string[] {
+  if (w <= 0) return [s];
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i += w) out.push(s.slice(i, i + w));
+  return out.length ? out : [''];
+}
+
+export function wrapWords(s: string, w: number): string[] {
+  const out: string[] = [];
+  for (const para of s.split('\n')) {
+    let line = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      if (word.length > w) {
+        if (line) out.push(line);
+        const chunks = wrapChars(word, w);
+        line = chunks.pop() ?? '';
+        out.push(...chunks);
+        continue;
+      }
+      if (!line) line = word;
+      else if (line.length + 1 + word.length <= w) line += ` ${word}`;
+      else {
+        out.push(line);
+        line = word;
+      }
+    }
+    out.push(line);
+  }
+  return out.length ? out : [''];
+}
+
+interface Col {
+  key: 'item' | 'size' | 'qty' | 'price' | 'subtotal';
+  header: string;
+  width: number;
+  align: Align;
+  numeric: boolean;
+}
+
+const MIN_ITEM = 8;
+
+function tableColumns(cfg: ReceiptTemplateConfig['items'], width: number, cells: Record<Col['key'], string[]>): Col[] {
+  const cols: Col[] = [{ key: 'item', header: 'Item', width: 0, align: 'left', numeric: false }];
+  if (cfg.columns.size && !cfg.sizeInline) cols.push({ key: 'size', header: 'Size', width: 0, align: 'left', numeric: false });
+  if (cfg.columns.qty) cols.push({ key: 'qty', header: 'Qty', width: 0, align: 'center', numeric: true });
+  if (cfg.columns.price) cols.push({ key: 'price', header: 'Price', width: 0, align: 'right', numeric: true });
+  if (cfg.columns.subtotal) cols.push({ key: 'subtotal', header: 'Total', width: 0, align: 'right', numeric: true });
+
+  for (const c of cols) {
+    if (c.key === 'item') continue;
+    const longest = Math.max(0, ...cells[c.key].map((v) => v.length));
+    c.width = c.key === 'size' ? Math.min(Math.max(c.header.length, longest), 8) : Math.max(c.header.length, longest);
+  }
+  const gaps = cols.length - 1;
+  const others = () => cols.reduce((s, c) => s + (c.key === 'item' ? 0 : c.width), 0);
+  // Shrink the widest non-item column until the item column has room; overflow then wraps in place.
+  while (width - gaps - others() < MIN_ITEM) {
+    const widest = cols.filter((c) => c.key !== 'item').sort((a, b) => b.width - a.width)[0];
+    if (!widest || widest.width <= 3) break;
+    widest.width -= 1;
+  }
+  cols[0].width = Math.max(1, width - gaps - others());
   return cols;
 }
 
-export function buildReceiptNodes(order: Order, items: OrderItem[], template: ReceiptTemplate, ctx: ReceiptContext): ReceiptNode[] {
+export function layoutReceipt(order: Order, items: OrderItem[], template: ReceiptTemplate, ctx: ReceiptContext): ReceiptLayout {
   const c = template.config;
   const st = c.style;
-  const font = st.font;
+  const W = charsPerLine(c);
+  const half = Math.max(8, Math.floor(W / 2));
   const cur = ctx.settings.currency_symbol;
-  const money = (v: number) => formatMoney(v, cur);
-  const nodes: ReceiptNode[] = [];
-  const text = (content: string, style: { align?: Align; bold?: boolean; size?: 1 | 2 } = {}): ReceiptNode => ({ type: 'text', content, style: { font, ...style } });
-  const cols2 = (left: string, right: string, bold = false): ReceiptNode => ({
-    type: 'columns',
-    columns: [{ content: left, width: 50 }, { content: right, width: 50, align: 'right' }],
-    style: { bold, font },
-  });
-
-  const headerNodes = (): ReceiptNode[] => {
-    const out: ReceiptNode[] = [];
-    if (c.header.showLogo && ctx.logoPath) out.push({ type: 'image', imagePath: ctx.logoPath, options: { align: c.header.align, widthPx: 240 } });
-    if (c.header.showName) {
-      out.push(text(ctx.settings.restaurant_name, { align: c.header.align, bold: st.boldHeader, size: 2 }));
-      if (ctx.settings.restaurant_address) out.push(text(ctx.settings.restaurant_address, { align: c.header.align }));
+  const lines: ReceiptLine[] = [];
+  const rule = () => lines.push({ kind: 'rule', text: '-'.repeat(W) });
+  const text = (s: string, opts: { align?: Align; bold?: boolean; big?: boolean } = {}) => {
+    const w = opts.big ? half : W;
+    for (const l of wrapWords(toAscii(s), w)) lines.push({ kind: 'text', text: fit(l, w, opts.align ?? 'left').trimEnd(), bold: opts.bold, big: opts.big, align: opts.align });
+  };
+  const pair = (label: string, value: string, opts: { bold?: boolean; big?: boolean } = {}) => {
+    const w = opts.big ? half : W;
+    const l = toAscii(label);
+    const v = toAscii(value);
+    if (l.length + 1 + v.length <= w) {
+      lines.push({ kind: 'text', text: l + fit(v, w - l.length, 'right'), bold: opts.bold, big: opts.big });
+      return;
     }
-    for (const line of c.header.extraLines) if (line.trim()) out.push(text(line, { align: c.header.align, bold: st.boldHeader }));
-    return out;
+    for (const part of wrapWords(l, w)) lines.push({ kind: 'text', text: part, bold: opts.bold, big: opts.big });
+    for (const part of wrapChars(v, w)) lines.push({ kind: 'text', text: fit(part, w, 'right'), bold: opts.bold, big: opts.big });
   };
 
-  const dateNode = () => text(dateText(order.created_at, c.dateTime.format));
+  const header = () => {
+    if (c.header.showLogo && ctx.logoPath) lines.push({ kind: 'logo', text: '', align: c.header.align });
+    if (c.header.showName) {
+      text(ctx.settings.restaurant_name, { align: c.header.align, bold: st.boldHeader, big: true });
+      if (ctx.settings.restaurant_address) text(ctx.settings.restaurant_address, { align: c.header.align });
+    }
+    for (const l of c.header.extraLines) if (l.trim()) text(l, { align: c.header.align, bold: st.boldHeader });
+  };
 
-  if (c.header.position === 'top') nodes.push(...headerNodes());
-  if (nodes.length) nodes.push({ type: 'line' });
+  if (c.header.position === 'top') {
+    header();
+    if (lines.length) rule();
+  }
 
-  if (c.dateTime.show && c.dateTime.position === 'top') nodes.push(dateNode());
-  if (c.orderNumber.show) nodes.push(text(`${c.orderNumber.label}: ${formatOrderNumber(order, c.orderNumber)}`, { bold: true }));
-  if (c.cashier.show && ctx.cashierName) nodes.push(text(`Cashier: ${ctx.cashierName}`));
-  if (c.table.show && order.table_code) nodes.push(text(`Table: ${order.table_code}`));
-  if (order.is_test && c.testWatermark) nodes.push(text('*** TEST ORDER ***', { align: 'center', bold: true }));
-  nodes.push({ type: 'line' });
+  if (c.dateTime.show && c.dateTime.position === 'top') text(dateText(order.created_at, c.dateTime.format));
+  if (c.orderNumber.show) text(`${c.orderNumber.label}: ${formatOrderNumber(order, c.orderNumber)}`, { bold: true });
+  if (c.cashier.show && ctx.cashierName) text(`Cashier: ${ctx.cashierName}`);
+  if (c.table.show && order.table_code) text(`Table: ${order.table_code}`);
+  if (order.is_test && c.testWatermark) text('*** TEST ORDER ***', { align: 'center', bold: true });
+  rule();
 
-  const cols = itemColumns(c.items);
-  const rows = items.map((it) => {
-    const name = c.items.sizeInline && c.items.columns.size && it.variant_name ? `${it.item_name} (${it.variant_name})` : it.item_name;
-    return cols.map((col) => {
-      switch (col.key) {
-        case 'item':
-          return name;
-        case 'size':
-          return it.variant_name ?? '';
-        case 'qty':
-          return String(it.quantity);
-        case 'price':
-          return money(it.unit_price);
-        case 'subtotal':
-          return money(it.line_total);
-      }
-    });
-  });
-  nodes.push({
-    type: 'table',
-    headers: cols.map((x) => x.header),
-    rows,
-    columnWidths: cols.map((x) => x.weight),
-    alignments: cols.map((x) => x.align),
-    headerStyle: { bold: true, font },
-    cellStyle: { bold: st.boldItems, font },
-  });
-  nodes.push({ type: 'line' });
+  const cells: Record<Col['key'], string[]> = {
+    item: items.map((it) => (c.items.sizeInline && c.items.columns.size && it.variant_name ? `${it.item_name} (${it.variant_name})` : it.item_name)),
+    size: items.map((it) => it.variant_name ?? ''),
+    qty: items.map((it) => `${c.items.qtyPrefix ? 'x' : ''}${it.quantity}`),
+    price: items.map((it) => num(it.unit_price)),
+    subtotal: items.map((it) => num(it.line_total)),
+  };
+  for (const k of Object.keys(cells) as Col['key'][]) cells[k] = cells[k].map(toAscii);
+  const cols = tableColumns(c.items, W, cells);
+
+  const renderRow = (values: string[], bold: boolean) => {
+    const wrapped = cols.map((col, i) => (col.numeric ? wrapChars(values[i], col.width) : wrapWords(values[i], col.width)));
+    const height = Math.max(...wrapped.map((w) => w.length));
+    for (let r = 0; r < height; r++) {
+      const line = cols.map((col, i) => fit(wrapped[i][r] ?? '', col.width, col.align)).join(' ');
+      lines.push({ kind: 'text', text: line.trimEnd(), bold });
+    }
+  };
+
+  renderRow(cols.map((col) => col.header), true);
+  rule();
+  items.forEach((_, idx) => renderRow(cols.map((col) => cells[col.key][idx]), st.boldItems));
+  rule();
 
   if (c.total.show) {
-    if (c.total.showSubtotal) nodes.push(cols2('Subtotal', money(order.subtotal)));
-    if (c.total.style === 'double') nodes.push(text(`${c.total.label}: ${money(order.total)}`, { align: 'right', bold: st.boldTotals, size: 2 }));
-    else nodes.push(cols2(c.total.label, money(order.total), c.total.style === 'bold' || st.boldTotals));
+    if (c.total.showSubtotal) pair('Subtotal', num(order.subtotal));
+    pair(c.total.label, `${cur} ${num(order.total)}`, { bold: st.boldTotals || c.total.style !== 'plain', big: c.total.style === 'double' });
   }
   if (c.amountReceived.show && order.amount_received != null) {
-    nodes.push(cols2('Received', money(order.amount_received), st.boldTotals));
-    if (c.amountReceived.showChange) nodes.push(cols2('Change', money(Math.max(0, order.amount_received - order.total)), st.boldTotals));
+    pair('Received', num(order.amount_received));
+    if (c.amountReceived.showChange) pair('Change', num(Math.max(0, order.amount_received - order.total)));
   }
-  if (c.paymentMethod.show && order.payment_method) nodes.push(text(`Payment: ${order.payment_method === 'cash' ? 'Cash' : 'Online'}`));
+  if (c.paymentMethod.show && order.payment_method) pair('Payment', order.payment_method === 'cash' ? 'Cash' : 'Online');
   if (c.note.show && order.note) {
-    nodes.push({ type: 'line', style: 'dashed' });
-    nodes.push(text(`${c.note.label}: ${order.note}`, { bold: true }));
+    rule();
+    text(`${c.note.label}: ${order.note}`, { bold: true });
   }
 
-  const tail: ReceiptNode[] = [];
-  if (c.dateTime.show && c.dateTime.position === 'bottom') tail.push(dateNode());
-  for (const line of c.footer.lines) if (line.trim()) tail.push(text(line, { align: 'center', bold: st.boldFooter }));
-  if (c.header.position === 'bottom') tail.push(...headerNodes());
-  if (tail.length) {
-    nodes.push({ type: 'line' });
-    nodes.push(...tail);
+  const tailStart = lines.length;
+  if (c.dateTime.show && c.dateTime.position === 'bottom') text(dateText(order.created_at, c.dateTime.format));
+  for (const l of c.footer.lines) if (l.trim()) text(l, { align: 'center', bold: st.boldFooter });
+  if (c.header.position === 'bottom') header();
+  if (lines.length > tailStart) lines.splice(tailStart, 0, { kind: 'rule', text: '-'.repeat(W) });
+
+  return { width: W, textSize: st.textSize, lines, feedLines: Math.max(0, Math.min(10, c.feedLines)), cut: c.cut };
+}
+
+const ESC = 0x1b;
+const GS = 0x1d;
+const LF = 0x0a;
+
+function prelude(size: ReceiptTextSize): number[] {
+  const font = size === 'large' ? 0 : 1;
+  const spacing = size === 'large' ? 32 : size === 'medium' ? 44 : 26;
+  return [ESC, 0x61, 0, ESC, 0x4d, font, ESC, 0x33, spacing];
+}
+
+function sizeByte(size: ReceiptTextSize, big?: boolean) {
+  if (big) return 0x11;
+  return size === 'medium' ? 0x01 : 0x00;
+}
+
+export function layoutToNodes(layout: ReceiptLayout, logoPath?: string | null): ReceiptNode[] {
+  const nodes: ReceiptNode[] = [];
+  let buf: number[] = prelude(layout.textSize);
+  const flush = () => {
+    if (buf.length) nodes.push({ type: 'raw', data: buf });
+    buf = [];
+  };
+  for (const line of layout.lines) {
+    if (line.kind === 'logo') {
+      if (!logoPath) continue;
+      flush();
+      nodes.push({ type: 'image', imagePath: logoPath, options: { align: line.align ?? 'center', widthPx: 240 } });
+      buf = prelude(layout.textSize);
+      continue;
+    }
+    buf.push(ESC, 0x45, line.bold ? 1 : 0, GS, 0x21, sizeByte(layout.textSize, line.big));
+    for (const ch of line.text) buf.push(ch.charCodeAt(0));
+    buf.push(LF);
   }
-  nodes.push({ type: 'feed', lines: Math.max(0, Math.min(10, c.feedLines)) });
-  if (c.cut) nodes.push({ type: 'cut' });
+  buf.push(ESC, 0x45, 0, GS, 0x21, 0, ESC, 0x4d, 0, ESC, 0x32);
+  flush();
+  if (layout.feedLines) nodes.push({ type: 'feed', lines: layout.feedLines });
+  if (layout.cut) nodes.push({ type: 'cut' });
   return nodes;
 }
 
-export interface PreviewLine {
-  text: string;
-  bold?: boolean;
-  size?: 1 | 2;
-  kind?: 'text' | 'rule' | 'image' | 'cut';
+export function buildReceiptNodes(order: Order, items: OrderItem[], template: ReceiptTemplate, ctx: ReceiptContext): ReceiptNode[] {
+  return layoutToNodes(layoutReceipt(order, items, template, ctx), ctx.logoPath);
 }
 
-// Line-by-line rendering for on-screen previews, mirroring the printer layout.
-export function receiptToLines(nodes: ReceiptNode[], width: number): PreviewLine[] {
-  const out: PreviewLine[] = [];
-  const fit = (s: string, w: number, align: Align = 'left') => {
-    const t = s.length > w ? s.slice(0, Math.max(0, w - 1)) + '~' : s;
-    const gap = w - t.length;
-    if (align === 'right') return ' '.repeat(gap) + t;
-    if (align === 'center') {
-      const l = Math.floor(gap / 2);
-      return ' '.repeat(l) + t + ' '.repeat(gap - l);
-    }
-    return t + ' '.repeat(gap);
-  };
-  const wrap = (s: string, w: number) => {
-    const res: string[] = [];
-    for (const raw of s.split('\n')) {
-      let line = raw;
-      while (line.length > w) {
-        let cut = line.lastIndexOf(' ', w);
-        if (cut <= 0) cut = w;
-        res.push(line.slice(0, cut));
-        line = line.slice(cut).trimStart();
-      }
-      res.push(line);
-    }
-    return res;
-  };
-  for (const n of nodes) {
-    switch (n.type) {
-      case 'text': {
-        const size = n.style?.size === 2 ? 2 : 1;
-        const w = size === 2 ? Math.floor(width / 2) : width;
-        for (const l of wrap(n.content, w)) out.push({ text: fit(l, w, n.style?.align ?? 'left'), bold: n.style?.bold, size });
-        break;
-      }
-      case 'line':
-        out.push({ text: (n.style === 'dashed' ? '- ' : '-').repeat(n.style === 'dashed' ? Math.floor(width / 2) : width), kind: 'rule' });
-        break;
-      case 'columns': {
-        const total = n.columns.reduce((s, c) => s + c.width, 0) || 100;
-        out.push({ text: n.columns.map((c) => fit(c.content, Math.floor((width * c.width) / total), c.align)).join(''), bold: n.style?.bold });
-        break;
-      }
-      case 'table': {
-        const total = n.columnWidths.reduce((s, w) => s + w, 0) || 100;
-        const widths = n.columnWidths.map((w) => Math.max(3, Math.floor((width * w) / total)));
-        const row = (cells: string[]) => cells.map((c, i) => fit(c, widths[i], n.alignments[i])).join('');
-        if (n.headers) {
-          out.push({ text: row(n.headers), bold: n.headerStyle?.bold });
-          out.push({ text: '-'.repeat(width), kind: 'rule' });
-        }
-        for (const r of n.rows) {
-          const first = r[0] ?? '';
-          if (first.length > widths[0]) {
-            const parts = wrap(first, widths[0]);
-            out.push({ text: row([parts[0], ...r.slice(1)]), bold: n.cellStyle?.bold });
-            for (const p of parts.slice(1)) out.push({ text: fit(p, widths[0]), bold: n.cellStyle?.bold });
-          } else out.push({ text: row(r), bold: n.cellStyle?.bold });
-        }
-        break;
-      }
-      case 'image':
-        out.push({ text: fit('[ LOGO ]', width, 'center'), kind: 'image' });
-        break;
-      case 'feed':
-        for (let i = 0; i < n.lines; i++) out.push({ text: '' });
-        break;
-      case 'cut':
-        out.push({ text: fit('- - - cut - - -', width, 'center'), kind: 'cut' });
-        break;
-    }
-  }
-  return out;
+export function testSlipLayout(restaurantName: string, paperWidthMm: 58 | 80, textSize: ReceiptTextSize, width: number | null): ReceiptLayout {
+  const W = width ?? defaultCharsPerLine(paperWidthMm, textSize);
+  const ruler = Array.from({ length: W }, (_, i) => String((i + 1) % 10)).join('');
+  const lines: ReceiptLine[] = [
+    { kind: 'text', text: fit(toAscii(restaurantName).slice(0, Math.floor(W / 2)), Math.floor(W / 2), 'center').trimEnd(), big: true, bold: true },
+    { kind: 'text', text: fit('Printer test', W, 'center').trimEnd() },
+    { kind: 'rule', text: '-'.repeat(W) },
+    { kind: 'text', text: ruler },
+    { kind: 'text', text: `${W} characters per line` },
+    { kind: 'text', text: 'Left' + fit('Right', W - 4, 'right') },
+    { kind: 'text', text: 'Bold line', bold: true },
+    { kind: 'rule', text: '-'.repeat(W) },
+    { kind: 'text', text: fit(formatDateTime(new Date().toISOString()), W, 'center').trimEnd() },
+  ];
+  return { width: W, textSize, lines, feedLines: 3, cut: true };
 }
 
 export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant | null, cashierId: string | null): { order: Order; items: OrderItem[] } {
@@ -253,9 +318,9 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
     source: 'pos',
     customer_order_id: null,
     table_code: 'T1',
-    subtotal: price * 2,
-    total: price * 2,
-    amount_received: price * 2 + 50,
+    subtotal: price * 2 + 1450,
+    total: price * 2 + 1450,
+    amount_received: price * 2 + 1500,
     payment_method: 'cash',
     note: 'Sample note for template preview',
     is_test: true,
@@ -277,6 +342,20 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
       unit_price: price,
       quantity: 2,
       line_total: price * 2,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: 'sample-item-2',
+      order_id: order.id,
+      admin_id: null,
+      menu_item_id: null,
+      variant_id: null,
+      item_name: 'Special Lagman with hand pulled noodles and beef',
+      variant_name: null,
+      unit_price: 1450,
+      quantity: 1,
+      line_total: 1450,
       created_at: now,
       updated_at: now,
     },

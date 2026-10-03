@@ -43,7 +43,7 @@ export default function PendingScreen() {
     if (!(await confirm(t('deleteAccount'), t('deleteAccountConfirm'), t('delete'), t('cancel'), true))) return;
     try {
       await deleteOwnAccount();
-      await signOut();
+      await signOut({ forget: true });
     } catch (e) {
       toast.error(`${t('deleteAccountFailed')}: ${(e as Error).message}`);
     }

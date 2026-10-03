@@ -5,6 +5,7 @@ import { clearUserData, initDb } from '@/lib/db';
 import type { Profile } from '@/lib/types';
 import { cacheProfile, getCachedProfile, getCurrentUserId, setCurrentUserId } from '@/features/auth/profileRepo';
 import { abortSync, resetSyncState } from '@/features/sync/syncEngine';
+import { clearLocalSession, forgetRememberedAccount, getRememberedAccount, rememberAccount, updateRememberedToken } from '@/features/auth/rememberedAccount';
 import { useLanguageStore } from './languageStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
@@ -22,7 +23,7 @@ interface AuthState {
   setProfile: (p: Profile) => void;
   setPendingPhoto: (uri: string | null) => void;
   setPendingCredentials: (c: { email: string; password: string } | null) => void;
-  signOut: () => Promise<void>;
+  signOut: (opts?: { forget?: boolean }) => Promise<void>;
 }
 
 let profileChannel: RealtimeChannel | null = null;
@@ -65,6 +66,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
           set({ status: 'signedOut', session: null, profile: null });
           return;
         }
+        if (session && event === 'TOKEN_REFRESHED') void updateRememberedToken(session.user.id, session.refresh_token);
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           void getState().applySession(session);
         }
@@ -116,6 +118,8 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
         set({ status: 'signedIn', profile: null, resolving: false });
       }
     }
+    const known = getState().profile;
+    if (known && known.id === userId) void rememberAccount(known, session.refresh_token).catch(() => undefined);
     subscribeToOwnProfile(userId, (p) => {
       cacheProfile(p);
       set({ profile: p });
@@ -141,8 +145,9 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   setPendingPhoto: (uri) => set({ pendingPhotoUri: uri }),
   setPendingCredentials: (c) => set({ pendingCredentials: c }),
 
-  signOut: async () => {
+  signOut: async (opts) => {
     abortSync();
+    const userId = getState().session?.user.id ?? getState().profile?.id ?? null;
     if (profileChannel) {
       supabase.removeChannel(profileChannel);
       profileChannel = null;
@@ -151,7 +156,17 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
     clearUserData();
     resetSyncState();
     set({ status: 'signedOut', session: null, profile: null, resolving: false, pendingPhotoUri: null, pendingCredentials: null });
-    // Network sign-out happens after the UI has already moved on.
-    supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    void (async () => {
+      const remembered = opts?.forget ? null : await getRememberedAccount();
+      if (remembered && remembered.id === userId) {
+        supabase.auth.stopAutoRefresh();
+        const { data } = await supabase.auth.getSession();
+        if (data.session) await updateRememberedToken(remembered.id, data.session.refresh_token);
+        await clearLocalSession();
+        return;
+      }
+      if (opts?.forget) await forgetRememberedAccount(false);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    })();
   },
 }));

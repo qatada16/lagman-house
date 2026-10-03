@@ -117,9 +117,15 @@ invalidates old QR prints. Customers type their table number as a hint.
 - Stock is deducted locally on order completion and authoritatively on the server through
   `deduct_stock_for_order(order_id)`, which is idempotent. Orders flagged `is_test` never touch stock.
 - Customer orders are claimed with `claim_customer_order(order_id, cashier_id)`, a single atomic UPDATE.
-- Receipts are rendered by one function (`features/receipts/render.ts`) from an order plus a template
-  config; the same function drives the printer and the on-screen preview. Templates choose printer font
-  A or B and which sections print bold.
+- Receipts are laid out by `features/receipts/render.ts` into exact fixed-width lines, sent to the printer
+  as raw ESC/POS bytes with no margin, and shown line for line in the template preview. Columns size
+  themselves to their content; long names wrap inside the Item column and overflowing numbers continue on the
+  next row under their own column. Templates pick Large (Font A), Medium (compact font at double height) or
+  Small (compact font), an optional characters-per-line override, bold sections and the "x2" quantity style.
+  Only the grand total shows the currency symbol.
+- Quick sign in: after a normal logout the login screen offers the last account on this device. Its refresh
+  token is kept in Android's encrypted keystore and is only used after the device lock (fingerprint, face or
+  PIN) passes. Removing the account from the login screen or deleting the account revokes it on the server.
 - History and analytics run on local SQLite data: any single date or range, cashier ranking, busiest hours,
   item-wise and cashier-wise sortable tables, revenue charts, and CSV export through the Android share sheet.
 - Anonymous web visitors have no table access at all; they only call `public_menu`, `place_customer_order`

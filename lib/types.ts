@@ -95,8 +95,11 @@ export interface StockLink {
 export type ReceiptAlign = 'left' | 'center' | 'right';
 export type ReceiptPosition = 'top' | 'bottom';
 
+export type ReceiptTextSize = 'large' | 'medium' | 'small';
+
 export interface ReceiptStyle {
-  font: 'A' | 'B';
+  textSize: ReceiptTextSize;
+  charsPerLine: number | null;
   boldHeader: boolean;
   boldItems: boolean;
   boldTotals: boolean;
@@ -121,6 +124,7 @@ export interface ReceiptTemplateConfig {
   items: {
     columns: { item: boolean; size: boolean; qty: boolean; price: boolean; subtotal: boolean };
     sizeInline: boolean;
+    qtyPrefix: boolean;
   };
   total: { show: boolean; showSubtotal: boolean; style: 'plain' | 'bold' | 'double'; label: string };
   amountReceived: { show: boolean; showChange: boolean };

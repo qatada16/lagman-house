@@ -236,7 +236,7 @@ export const usePrinterStore = create<PrinterState>((set, getState) => ({
     set({ printing: true, lastError: null });
     try {
       const result = await ThermalPrinter.printReceipt({
-        printers: [{ address: btAddress(device.address), options: { paperWidthMm, encoding: 'ascii', marginMm: 1, keepAlive: true } }],
+        printers: [{ address: btAddress(device.address), options: { paperWidthMm, encoding: 'ascii', marginMm: 0, keepAlive: true } }],
         documents: [nodes as never],
       });
       if (!result.success) {

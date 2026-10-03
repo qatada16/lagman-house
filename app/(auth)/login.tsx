@@ -8,6 +8,7 @@ import { colors, spacing } from '@/constants/theme';
 import { describeAuthError, signIn } from '@/features/auth/authApi';
 import { useSyncStore } from '@/store/syncStore';
 import NetInfo from '@react-native-community/netinfo';
+import { RememberedAccountCard } from '@/features/auth/RememberedAccountCard';
 
 export default function LoginScreen() {
   const t = useT();
@@ -43,6 +44,13 @@ export default function LoginScreen() {
 
   return (
     <AuthFrame title={t('welcomeBack')} subtitle={t('loginSubtitle')}>
+      <RememberedAccountCard
+        onExpired={(id) => {
+          setIdentifier(id);
+          setError(t('sessionExpired'));
+        }}
+        onError={setError}
+      />
       <Input
         label={t('emailOrPhone')}
         value={identifier}

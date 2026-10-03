@@ -87,7 +87,7 @@ export function PrinterPanel({ showSamplePrint = true }: { showSamplePrint?: boo
         ) : null}
         <View style={[row, { gap: spacing.sm, marginTop: spacing.md }]}>
           <Button title={t('scan')} icon="bluetooth" onPress={openPicker} style={{ flex: 1 }} />
-          <Button title={t('printTestSlip')} variant="action" icon="printer" disabled={!printer.device} loading={printing} onPress={() => void printRaw(testSlipNodes(getSettings().restaurant_name), template?.config.paperWidthMm ?? 58)} />
+          <Button title={t('printTestSlip')} variant="action" icon="printer" disabled={!printer.device} loading={printing} onPress={() => void printRaw(testSlipNodes(getSettings().restaurant_name, template?.config.paperWidthMm ?? 58, template?.config.style.textSize ?? 'large', template?.config.style.charsPerLine ?? null), template?.config.paperWidthMm ?? 58)} />
         </View>
       </Card>
 

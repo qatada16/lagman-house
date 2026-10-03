@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Button, Card, IconButton, Input, Screen, Segmented, Select, Toggle } from '@/components/ui';
+import { AppText, Button, Card, IconButton, Input, Screen, Segmented, Select, Toggle } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { spacing } from '@/constants/theme';
 import { DEFAULT_TEMPLATE_CONFIG, deleteTemplate, getTemplate, saveTemplate } from '@/features/receipts/templateRepo';
 import { ReceiptPreview } from '@/features/receipts/ReceiptPreview';
-import { makeSampleOrder } from '@/features/receipts/render';
+import { defaultCharsPerLine, makeSampleOrder } from '@/features/receipts/render';
 import { getSettings } from '@/features/settings/settingsRepo';
 import { listMenuItems, listVariants } from '@/features/menu/menuRepo';
 import { usePrint } from '@/features/printer/usePrint';
@@ -27,6 +27,7 @@ export default function TemplateEditScreen() {
   const [isActive, setIsActive] = useState(existing?.is_active ?? true);
   const [cfg, setCfg] = useState<ReceiptTemplateConfig>(existing?.config ?? DEFAULT_TEMPLATE_CONFIG);
   const [error, setError] = useState<string | null>(null);
+  const [cpl, setCpl] = useState(cfg.style.charsPerLine != null ? String(cfg.style.charsPerLine) : '');
 
   const sample = useMemo(() => {
     const item = listMenuItems({ activeOnly: true })[0] ?? null;
@@ -94,14 +95,32 @@ export default function TemplateEditScreen() {
           </Card>
 
           <Card title={t('sectionStyle')}>
-            <Select
-              label={t('printerFont')}
-              value={cfg.style.font}
-              onChange={(v) => patch('style', { font: v })}
+            <Segmented
+              label={t('textSize')}
+              value={cfg.style.textSize}
+              onChange={(v) => patch('style', { textSize: v })}
               options={[
-                { value: 'A', label: t('fontA') },
-                { value: 'B', label: t('fontB') },
+                { value: 'large', label: t('sizeLarge') },
+                { value: 'medium', label: t('sizeMedium') },
+                { value: 'small', label: t('sizeSmall') },
               ]}
+            />
+            <AppText variant="small" style={{ marginTop: spacing.xs }}>
+              {t(cfg.style.textSize === 'large' ? 'sizeLargeHint' : cfg.style.textSize === 'medium' ? 'sizeMediumHint' : 'sizeSmallHint')}
+            </AppText>
+            <View style={{ height: spacing.sm }} />
+            <Input
+              label={t('charsPerLine')}
+              value={cpl}
+              onChangeText={(v) => {
+                setCpl(v);
+                const n = Number(v);
+                patch('style', { charsPerLine: v === '' ? null : n >= 16 && n <= 72 ? n : cfg.style.charsPerLine });
+              }}
+              digitsOnly
+              maxLength={2}
+              placeholder={String(defaultCharsPerLine(cfg.paperWidthMm, cfg.style.textSize))}
+              hint={t('charsPerLineHint', { n: defaultCharsPerLine(cfg.paperWidthMm, cfg.style.textSize) })}
             />
             <Toggle label={t('boldHeader')} value={cfg.style.boldHeader} onChange={(v) => patch('style', { boldHeader: v })} />
             <Toggle label={t('boldItems')} value={cfg.style.boldItems} onChange={(v) => patch('style', { boldItems: v })} />
@@ -150,6 +169,7 @@ export default function TemplateEditScreen() {
           <Card title={t('sectionItems')}>
             <Toggle label={t('colItem')} value disabled onChange={() => undefined} />
             <Toggle label={t('colSize')} value={cfg.items.columns.size} onChange={(v) => setCfg((c) => ({ ...c, items: { ...c.items, columns: { ...c.items.columns, size: v } } }))} />
+            <Toggle label={t('qtyPrefix')} value={cfg.items.qtyPrefix} disabled={!cfg.items.columns.qty} onChange={(v) => setCfg((c) => ({ ...c, items: { ...c.items, qtyPrefix: v } }))} />
             <Toggle label={t('sizeInline')} value={cfg.items.sizeInline} disabled={!cfg.items.columns.size} onChange={(v) => setCfg((c) => ({ ...c, items: { ...c.items, sizeInline: v } }))} />
             <Toggle label={t('colQty')} value={cfg.items.columns.qty} onChange={(v) => setCfg((c) => ({ ...c, items: { ...c.items, columns: { ...c.items.columns, qty: v } } }))} />
             <Toggle label={t('colPrice')} value={cfg.items.columns.price} onChange={(v) => setCfg((c) => ({ ...c, items: { ...c.items, columns: { ...c.items.columns, price: v } } }))} />

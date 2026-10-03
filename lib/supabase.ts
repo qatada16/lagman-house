@@ -24,4 +24,8 @@ AppState.addEventListener('change', (state) => {
   else supabase.auth.stopAutoRefresh();
 });
 
+export const SUPABASE_URL = url;
+export const SUPABASE_ANON_KEY = anonKey;
+export const SESSION_STORAGE_KEY = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+
 export const PUBLIC_MENU_URL = process.env.EXPO_PUBLIC_PUBLIC_MENU_URL ?? '';

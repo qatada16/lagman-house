@@ -27,7 +27,7 @@ web/                 static public menu page (QR ordering)
 
 1. Copy `.env.example` to `.env` and fill in the Supabase URL, publishable key and hosted menu URL.
    The same three values live in each `eas.json` build profile's `env` block, which is what cloud builds use.
-2. Run `supabase/schema.sql` in the Supabase SQL Editor, then every file in `supabase/migrations/` in numeric order.
+2. Run `supabase/schema.sql` in the Supabase SQL Editor, then every file in `supabase/migrations/` in numeric order (004 adds promotions and app releases).
    Both are safe to re-run.
 3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
    Email verification uses Supabase's default confirmation link, which deep-links back into the app.
@@ -52,6 +52,32 @@ web/                 static public menu page (QR ordering)
 - Recording a stock purchase (Stock -> item -> Record purchase) stores quantity and price, raises the
   quantity on hand, and optionally posts the cost to Expenses. Stock -> Purchase report shows spend by
   item and by month with CSV export.
+
+## Promotions
+
+- **Deals** (drawer -> Promotions -> Deals): a fixed-price combo made of "included items". Each included item
+  lists the menu items the customer may choose from, optionally pinned to one size; the first choice is
+  preselected. At checkout the cashier (or the customer on the web menu) picks the options in a sheet. A deal is
+  stored as one priced line plus one zero-priced line per component carrying the real menu item and size, so
+  stock deduction and item statistics count every component.
+- **Discounts**: a percent or fixed amount off selected menu items, with an optional date window. Applied
+  automatically in the cashier grid, the admin menu list, the public web menu and the server-side pricing of
+  customer orders. Original prices are shown struck through. The best discount wins; they do not stack.
+- **Coupons**: codes with percent or fixed value, optional minimum order, maximum discount, usage cap and date
+  window. Cashiers see the active codes on the checkout screen and can also type one. Usage is counted by a
+  database trigger, so a cap cannot be exceeded by two cashiers at once.
+- Receipt templates have "Show total saved" and "Show coupon line" toggles.
+
+## App updates
+
+Insert a row in `app_releases` (version, optional `apk_url`, `notes`, `mandatory`) after each release build.
+Every launch calls `latest_release()`; if the version is newer than the installed one the app shows an update
+dialog with a Download button when `apk_url` is set. Mandatory releases cannot be dismissed. Example:
+
+```sql
+insert into public.app_releases (version, build_number, apk_url, notes)
+values ('1.0.2', 3, 'https://expo.dev/artifacts/eas/....apk', 'Deals, discounts and coupons');
+```
 
 ## Scripts
 

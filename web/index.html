@@ -51,8 +51,20 @@
         <input id="note" maxlength="120" />
       </label>
       <div class="sheet-total"><span data-i18n="total">Total</span><strong id="sheetTotal"></strong></div>
+      <div id="sheetSavings" class="muted small"></div>
       <button id="submitBtn" class="primary wide" type="button" data-i18n="send">Send to cashier</button>
       <p class="muted small" data-i18n="disclaimer">A cashier will confirm your order and take payment at the counter.</p>
+    </div>
+  </div>
+
+  <div id="dealSheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="dealTitle"></h2>
+        <button id="closeDeal" class="ghost" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="dealBody"></div>
+      <button id="dealAdd" class="primary wide" type="button"></button>
     </div>
   </div>
 

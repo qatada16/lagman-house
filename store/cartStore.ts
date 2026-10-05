@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { CartLine, MenuItem, MenuItemVariant, PaymentMethod } from '@/lib/types';
+import type { CartComponent, CartLine, Coupon, Deal, MenuItem, MenuItemVariant, PaymentMethod } from '@/lib/types';
+import { listDiscounts } from '@/features/promos/promoRepo';
+import { priceWithDiscounts } from '@/features/promos/pricing';
 
 export const NOTE_WORD_LIMIT = 10;
 
@@ -7,7 +9,6 @@ export function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-// Live cap: keep at most N words, but allow trailing whitespace while typing.
 export function clampNote(text: string, limit = NOTE_WORD_LIMIT) {
   const words = text.split(/(\s+)/);
   let count = 0;
@@ -25,13 +26,50 @@ export function clampNote(text: string, limit = NOTE_WORD_LIMIT) {
   return out;
 }
 
+export function itemLine(item: MenuItem, variant: MenuItemVariant | null): CartLine {
+  const base = variant ? variant.price : item.base_price;
+  const priced = priceWithDiscounts(item.id, base, listDiscounts(true));
+  return {
+    key: `${item.id}:${variant?.id ?? ''}`,
+    menu_item_id: item.id,
+    variant_id: variant?.id ?? null,
+    name: item.name,
+    variant_name: variant?.name ?? null,
+    unit_price: priced.price,
+    original_unit_price: priced.original,
+    discount_id: priced.discountId,
+    quantity: 1,
+    deal_id: null,
+    components: [],
+  };
+}
+
+export function dealLine(deal: Deal, components: CartComponent[]): CartLine {
+  const sig = components.map((c) => `${c.slot_id}=${c.menu_item_id}:${c.variant_id ?? ''}`).join('|');
+  return {
+    key: `deal:${deal.id}:${sig}`,
+    menu_item_id: null,
+    variant_id: null,
+    name: deal.name,
+    variant_name: null,
+    unit_price: deal.price,
+    original_unit_price: deal.price,
+    discount_id: null,
+    quantity: 1,
+    deal_id: deal.id,
+    components,
+  };
+}
+
 interface CartState {
   lines: CartLine[];
   note: string;
   isTest: boolean;
   amountReceived: string;
   paymentMethod: PaymentMethod;
+  coupon: Coupon | null;
   add: (item: MenuItem, variant: MenuItemVariant | null) => void;
+  addLine: (line: CartLine) => void;
   setQuantity: (key: string, qty: number) => void;
   remove: (key: string) => void;
   clear: () => void;
@@ -39,7 +77,14 @@ interface CartState {
   setIsTest: (v: boolean) => void;
   setAmountReceived: (v: string) => void;
   setPaymentMethod: (v: PaymentMethod) => void;
+  setCoupon: (c: Coupon | null) => void;
   replaceLines: (lines: CartLine[]) => void;
+}
+
+function merge(lines: CartLine[], line: CartLine) {
+  const existing = lines.find((l) => l.key === line.key);
+  if (existing) return lines.map((l) => (l.key === line.key ? { ...l, quantity: l.quantity + line.quantity } : l));
+  return [...lines, line];
 }
 
 export const useCartStore = create<CartState>((set) => ({
@@ -48,38 +93,24 @@ export const useCartStore = create<CartState>((set) => ({
   isTest: false,
   amountReceived: '',
   paymentMethod: 'cash',
+  coupon: null,
 
-  add: (item, variant) =>
-    set((s) => {
-      const key = `${item.id}:${variant?.id ?? ''}`;
-      const existing = s.lines.find((l) => l.key === key);
-      if (existing) return { lines: s.lines.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l)) };
-      const line: CartLine = {
-        key,
-        menu_item_id: item.id,
-        variant_id: variant?.id ?? null,
-        name: item.name,
-        variant_name: variant?.name ?? null,
-        unit_price: variant ? variant.price : item.base_price,
-        quantity: 1,
-      };
-      return { lines: [...s.lines, line] };
-    }),
+  add: (item, variant) => set((s) => ({ lines: merge(s.lines, itemLine(item, variant)) })),
+  addLine: (line) => set((s) => ({ lines: merge(s.lines, line) })),
 
   setQuantity: (key, qty) =>
     set((s) => ({ lines: qty <= 0 ? s.lines.filter((l) => l.key !== key) : s.lines.map((l) => (l.key === key ? { ...l, quantity: qty } : l)) })),
 
   remove: (key) => set((s) => ({ lines: s.lines.filter((l) => l.key !== key) })),
 
-  clear: () => set({ lines: [], note: '', isTest: false, amountReceived: '', paymentMethod: 'cash' }),
+  clear: () => set({ lines: [], note: '', isTest: false, amountReceived: '', paymentMethod: 'cash', coupon: null }),
 
   setNote: (note) => set({ note: clampNote(note) }),
   setIsTest: (isTest) => set({ isTest }),
   setAmountReceived: (amountReceived) => set({ amountReceived }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+  setCoupon: (coupon) => set({ coupon }),
   replaceLines: (lines) => set({ lines }),
 }));
 
-export function cartSubtotal(lines: CartLine[]) {
-  return Math.round(lines.reduce((s, l) => s + l.unit_price * l.quantity, 0) * 100) / 100;
-}
+export { cartSubtotal } from '@/features/promos/pricing';

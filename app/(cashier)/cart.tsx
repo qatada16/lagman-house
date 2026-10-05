@@ -5,12 +5,14 @@ import { AppText, Badge, Button, Card, Divider, IconButton, Screen } from '@/com
 import { CartLines } from '@/features/orders/CartPanel';
 import { CheckoutForm } from '@/features/orders/CheckoutForm';
 import { PrintButtons } from '@/features/orders/PrintButtons';
+import { TotalsSummary } from '@/features/orders/TotalsSummary';
 import { draftToOrder, useDraftOrder } from '@/features/orders/draftOrder';
 import { createOrder } from '@/features/orders/orderRepo';
 import { getSettings } from '@/features/settings/settingsRepo';
 import { useLayout, useT } from '@/lib/i18n';
-import { spacing } from '@/constants/theme';
-import { cartSubtotal, useCartStore } from '@/store/cartStore';
+import { colors, spacing } from '@/constants/theme';
+import { useCartStore } from '@/store/cartStore';
+import { computeTotals } from '@/features/promos/pricing';
 import { useAuthStore } from '@/store/authStore';
 import { formatMoney } from '@/lib/format';
 import { toast } from '@/store/toastStore';
@@ -24,7 +26,8 @@ export default function CartReviewScreen() {
   const cart = useCartStore();
   const draft = useDraftOrder();
   const currency = getSettings().currency_symbol;
-  const total = cartSubtotal(cart.lines);
+  const totals = computeTotals(cart.lines, cart.coupon);
+  const total = totals.total;
   const [completed, setCompleted] = useState<{ order: Order; items: OrderItem[] } | null>(null);
 
   const preview = draftToOrder(draft, cart.lines, {
@@ -34,6 +37,7 @@ export default function CartReviewScreen() {
     amountReceived: cart.amountReceived,
     paymentMethod: cart.paymentMethod,
     source: 'pos',
+    coupon: cart.coupon,
   });
 
   const complete = () => {
@@ -50,6 +54,7 @@ export default function CartReviewScreen() {
       amountReceived: received != null && !Number.isNaN(received) ? received : null,
       paymentMethod: cart.paymentMethod,
       source: 'pos',
+      coupon: cart.coupon,
     });
     setCompleted(result);
     cart.clear();
@@ -64,17 +69,26 @@ export default function CartReviewScreen() {
             {completed.order.is_test ? <Badge label={t('testOrder')} tone="warning" /> : null}
             <Badge label={completed.order.payment_method === 'cash' ? t('paymentCash') : t('paymentOnline')} tone="info" />
           </View>
-          {completed.items.map((it) => (
+          {completed.items.filter((it) => !it.parent_item_id).map((it) => (
             <View key={it.id} style={[row, { justifyContent: 'space-between', paddingVertical: 4 }]}>
               <AppText style={{ flex: 1 }}>{`${it.quantity} x ${it.item_name}${it.variant_name ? ` (${it.variant_name})` : ''}`}</AppText>
               <AppText weight="600">{formatMoney(it.line_total, currency)}</AppText>
             </View>
           ))}
           <Divider />
+          {completed.order.coupon_discount > 0 ? (
+            <View style={[row, { justifyContent: 'space-between' }]}>
+              <AppText variant="small">{`${t('couponLine')} ${completed.order.coupon_code ?? ''}`}</AppText>
+              <AppText variant="small">{`-${formatMoney(completed.order.coupon_discount, currency)}`}</AppText>
+            </View>
+          ) : null}
           <View style={[row, { justifyContent: 'space-between' }]}>
             <AppText variant="heading">{t('total')}</AppText>
             <AppText variant="heading">{formatMoney(completed.order.total, currency)}</AppText>
           </View>
+          {completed.order.savings_total > 0 ? (
+            <AppText variant="small" color={colors.success}>{`${t('youSave')}: ${formatMoney(completed.order.savings_total, currency)}`}</AppText>
+          ) : null}
           {completed.order.note ? <AppText variant="small">{`${t('notes')}: ${completed.order.note}`}</AppText> : null}
         </Card>
         <Card title={t('printReceipt')}>
@@ -104,9 +118,8 @@ export default function CartReviewScreen() {
         <View style={{ paddingHorizontal: spacing.md }}>
           <CartLines />
         </View>
-        <View style={[row, { justifyContent: 'space-between', padding: spacing.md }]}>
-          <AppText variant="heading">{t('total')}</AppText>
-          <AppText variant="heading">{formatMoney(total, currency)}</AppText>
+        <View style={{ padding: spacing.md }}>
+          <TotalsSummary totals={totals} currency={currency} />
         </View>
       </Card>
       <Card>

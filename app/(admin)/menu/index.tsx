@@ -9,6 +9,8 @@ import { useLocalQuery } from '@/features/app/useLocalQuery';
 import { listCategories, listMenuItems, listAllVariants } from '@/features/menu/menuRepo';
 import { CategoryManager } from '@/features/menu/CategoryManager';
 import { getSettings } from '@/features/settings/settingsRepo';
+import { listDiscounts } from '@/features/promos/promoRepo';
+import { priceWithDiscounts } from '@/features/promos/pricing';
 import { formatMoney } from '@/lib/format';
 
 export default function MenuAdminScreen() {
@@ -24,18 +26,23 @@ export default function MenuAdminScreen() {
       categories: listCategories(true),
       items: listMenuItems({ categoryId: category === 'all' ? null : category, search }),
       variants: listAllVariants(),
+      discounts: listDiscounts(true),
       currency: getSettings().currency_symbol,
     }),
     [category, search]
   );
 
   const priceLabel = (id: string, base: number, hasVariants: boolean) => {
-    if (!hasVariants) return formatMoney(base, data.currency);
+    const show = (p: number) => {
+      const d = priceWithDiscounts(id, p, data.discounts);
+      return d.price < d.original ? `${formatMoney(d.price, data.currency)} (${formatMoney(d.original, data.currency)})` : formatMoney(p, data.currency);
+    };
+    if (!hasVariants) return show(base);
     const prices = data.variants.filter((v) => v.menu_item_id === id).map((v) => v.price);
     if (prices.length === 0) return '-';
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    return min === max ? formatMoney(min, data.currency) : `${formatMoney(min, data.currency)} - ${formatMoney(max, data.currency)}`;
+    return min === max ? show(min) : `${show(min)} - ${show(max)}`;
   };
 
   return (

@@ -196,12 +196,14 @@ export function layoutReceipt(order: Order, items: OrderItem[], template: Receip
   if (order.is_test && c.testWatermark) text('*** TEST ORDER ***', { align: 'center', bold: true });
   rule();
 
+  const parents = items.filter((it) => !it.parent_item_id);
+  const childrenOf = (id: string) => items.filter((it) => it.parent_item_id === id);
   const cells: Record<Col['key'], string[]> = {
-    item: items.map((it) => (c.items.sizeInline && c.items.columns.size && it.variant_name ? `${it.item_name} (${it.variant_name})` : it.item_name)),
-    size: items.map((it) => it.variant_name ?? ''),
-    qty: items.map((it) => `${c.items.qtyPrefix ? 'x' : ''}${it.quantity}`),
-    price: items.map((it) => num(it.unit_price)),
-    subtotal: items.map((it) => num(it.line_total)),
+    item: parents.map((it) => (c.items.sizeInline && c.items.columns.size && it.variant_name ? `${it.item_name} (${it.variant_name})` : it.item_name)),
+    size: parents.map((it) => it.variant_name ?? ''),
+    qty: parents.map((it) => `${c.items.qtyPrefix ? 'x' : ''}${it.quantity}`),
+    price: parents.map((it) => num(it.unit_price)),
+    subtotal: parents.map((it) => num(it.line_total)),
   };
   for (const k of Object.keys(cells) as Col['key'][]) cells[k] = cells[k].map(toAscii);
   const cols = tableColumns(c.items, W, cells);
@@ -217,13 +219,21 @@ export function layoutReceipt(order: Order, items: OrderItem[], template: Receip
 
   renderRow(cols.map((col) => col.header), true);
   rule();
-  items.forEach((_, idx) => renderRow(cols.map((col) => cells[col.key][idx]), st.boldItems));
+  parents.forEach((parent, idx) => {
+    renderRow(cols.map((col) => cells[col.key][idx]), st.boldItems);
+    for (const comp of childrenOf(parent.id)) {
+      const label = comp.variant_name ? `${comp.item_name} (${comp.variant_name})` : comp.item_name;
+      for (const part of wrapWords(toAscii(label), Math.max(4, cols[0].width - 2))) lines.push({ kind: 'text', text: `  ${part}` });
+    }
+  });
   rule();
 
   if (c.total.show) {
-    if (c.total.showSubtotal) pair('Subtotal', num(order.subtotal));
+    if (c.total.showSubtotal || order.coupon_discount > 0) pair('Subtotal', num(order.subtotal));
+    if (order.coupon_discount > 0 && c.savings.showCoupon) pair(`Coupon ${order.coupon_code ?? ''}`.trim(), `-${num(order.coupon_discount)}`);
     pair(c.total.label, `${cur} ${num(order.total)}`, { bold: st.boldTotals || c.total.style !== 'plain', big: c.total.style === 'double' });
   }
+  if (c.savings.show && order.savings_total > 0) pair(c.savings.label, `${cur} ${num(order.savings_total)}`, { bold: true });
   if (c.amountReceived.show && order.amount_received != null) {
     pair('Received', num(order.amount_received));
     if (c.amountReceived.showChange) pair('Change', num(Math.max(0, order.amount_received - order.total)));
@@ -319,10 +329,15 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
     customer_order_id: null,
     table_code: 'T1',
     subtotal: price * 2 + 1450,
-    total: price * 2 + 1450,
+    total: price * 2 + 1300,
     amount_received: price * 2 + 1500,
     payment_method: 'cash',
     note: 'Sample note for template preview',
+    item_discount_total: 0,
+    coupon_id: null,
+    coupon_code: 'WELCOME10',
+    coupon_discount: 150,
+    savings_total: 150,
     is_test: true,
     stock_deducted: false,
     device_id: null,
@@ -342,6 +357,10 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
       unit_price: price,
       quantity: 2,
       line_total: price * 2,
+      parent_item_id: null,
+      deal_id: null,
+      original_unit_price: price,
+      discount_id: null,
       created_at: now,
       updated_at: now,
     },
@@ -356,6 +375,10 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
       unit_price: 1450,
       quantity: 1,
       line_total: 1450,
+      parent_item_id: null,
+      deal_id: null,
+      original_unit_price: 1450,
+      discount_id: null,
       created_at: now,
       updated_at: now,
     },

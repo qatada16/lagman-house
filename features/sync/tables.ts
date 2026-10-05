@@ -16,6 +16,10 @@ export const SYNC_TABLES: SyncTable[] = [
   { name: 'stock_purchases', boolCols: [], jsonCols: [], pushMode: 'upsert' },
   { name: 'expenses', boolCols: [], jsonCols: [], pushMode: 'upsert' },
   { name: 'receipt_templates', boolCols: ['is_active'], jsonCols: ['config'], pushMode: 'upsert' },
+  { name: 'deals', boolCols: ['is_active'], jsonCols: [], pushMode: 'upsert' },
+  { name: 'deal_slots', boolCols: [], jsonCols: ['options'], pushMode: 'upsert' },
+  { name: 'discounts', boolCols: ['is_active'], jsonCols: ['item_ids'], pushMode: 'upsert' },
+  { name: 'coupons', boolCols: ['is_active'], jsonCols: [], pushMode: 'upsert' },
   { name: 'orders', boolCols: ['is_test', 'stock_deducted'], jsonCols: [], pushMode: 'upsert' },
   { name: 'order_items', boolCols: [], jsonCols: [], pushMode: 'upsert' },
 ];
@@ -42,6 +46,7 @@ export function toServer(t: SyncTable, row: Row): Row {
     delete out.menu_token;
     delete out.menu_is_default;
   }
+  if (t.name === 'coupons') delete out.uses_count;
   if ((t.name === 'menu_items' && typeof out.image_url === 'string' && out.image_url.startsWith('file:')) || (t.name === 'profiles' && typeof out.photo_url === 'string' && out.photo_url.startsWith('file:'))) {
     if (t.name === 'menu_items') out.image_url = null;
     else out.photo_url = null;

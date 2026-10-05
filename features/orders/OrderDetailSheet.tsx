@@ -29,13 +29,30 @@ export function OrderDetailSheet({ order, onClose }: { order: OrderWithMeta | nu
       {order.cashier_name ? <AppText variant="small">{`${t('cashier')}: ${order.cashier_name}`}</AppText> : null}
       {order.table_code ? <AppText variant="small">{t('tableShort', { code: order.table_code })}</AppText> : null}
       <Divider />
-      {items.map((it) => (
-        <View key={it.id} style={[row, { justifyContent: 'space-between', paddingVertical: 4 }]}>
-          <AppText style={{ flex: 1 }}>{`${it.quantity} x ${it.item_name}${it.variant_name ? ` (${it.variant_name})` : ''}`}</AppText>
-          <AppText weight="600">{formatMoney(it.line_total, currency)}</AppText>
-        </View>
-      ))}
+      {items
+        .filter((it) => !it.parent_item_id)
+        .map((it) => (
+          <View key={it.id} style={{ paddingVertical: 4 }}>
+            <View style={[row, { justifyContent: 'space-between' }]}>
+              <AppText style={{ flex: 1 }}>{`${it.quantity} x ${it.item_name}${it.variant_name ? ` (${it.variant_name})` : ''}`}</AppText>
+              <AppText weight="600">{formatMoney(it.line_total, currency)}</AppText>
+            </View>
+            {items
+              .filter((c) => c.parent_item_id === it.id)
+              .map((c) => (
+                <AppText key={c.id} variant="small" style={{ paddingStart: spacing.md }}>
+                  {`${c.item_name}${c.variant_name ? ` (${c.variant_name})` : ''}`}
+                </AppText>
+              ))}
+          </View>
+        ))}
       <Divider />
+      {order.coupon_discount > 0 ? (
+        <View style={[row, { justifyContent: 'space-between' }]}>
+          <AppText variant="small">{`${t('couponLine')} ${order.coupon_code ?? ''}`}</AppText>
+          <AppText variant="small">{`-${formatMoney(order.coupon_discount, currency)}`}</AppText>
+        </View>
+      ) : null}
       <View style={[row, { justifyContent: 'space-between' }]}>
         <AppText variant="heading">{t('total')}</AppText>
         <AppText variant="heading">{formatMoney(order.total, currency)}</AppText>
@@ -47,6 +64,7 @@ export function OrderDetailSheet({ order, onClose }: { order: OrderWithMeta | nu
         </View>
       ) : null}
       {order.payment_method ? <AppText variant="small">{`${t('paymentMethod')}: ${order.payment_method === 'cash' ? t('paymentCash') : t('paymentOnline')}`}</AppText> : null}
+      {order.savings_total > 0 ? <AppText variant="small">{`${t('youSave')}: ${formatMoney(order.savings_total, currency)}`}</AppText> : null}
       {order.note ? <AppText variant="small">{`${t('notes')}: ${order.note}`}</AppText> : null}
       {templates.length > 0 ? (
         <View style={[row, { gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md }]}>

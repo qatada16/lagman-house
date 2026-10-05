@@ -12,13 +12,15 @@ import { getSettings } from '@/features/settings/settingsRepo';
 import { cancelCustomerOrder, completeCustomerOrder, releaseCustomerOrder } from '@/features/qr/customerOrdersApi';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
-import { cartSubtotal, clampNote, useCartStore } from '@/store/cartStore';
+import { clampNote, dealLine, itemLine, useCartStore } from '@/store/cartStore';
+import { computeTotals } from '@/features/promos/pricing';
+import { getDeal, listDealSlots } from '@/features/promos/promoRepo';
+import { TotalsSummary } from '@/features/orders/TotalsSummary';
 import { useCustomerOrderStore } from '@/store/customerOrderStore';
 import { useAuthStore } from '@/store/authStore';
-import { formatMoney } from '@/lib/format';
 import { confirm } from '@/lib/confirm';
 import { toast } from '@/store/toastStore';
-import type { CartLine } from '@/lib/types';
+import type { CartComponent, CartLine } from '@/lib/types';
 
 export default function ClaimedOrderScreen() {
   const t = useT();
@@ -40,7 +42,35 @@ export default function ClaimedOrderScreen() {
     const lines: CartLine[] = [];
     const missing: string[] = [];
     for (const ci of customerOrder.items) {
-      const item = getMenuItem(ci.menu_item_id);
+      if (ci.deal_id) {
+        const deal = getDeal(ci.deal_id);
+        if (!deal || !deal.is_active) {
+          missing.push(ci.name);
+          continue;
+        }
+        const slots = listDealSlots(deal.id);
+        const components: CartComponent[] = [];
+        let ok = true;
+        for (const slot of slots) {
+          const chosen = ci.components?.find((c) => c.slot_id === slot.id) ?? null;
+          const opt = chosen ? slot.options.find((o) => o.menu_item_id === chosen.menu_item_id && (o.variant_id == null || o.variant_id === chosen.variant_id)) : slot.options[slot.default_index] ?? slot.options[0];
+          const item = opt ? getMenuItem(opt.menu_item_id) : null;
+          if (!opt || !item) {
+            ok = false;
+            break;
+          }
+          const variantId = chosen?.variant_id ?? opt.variant_id ?? (item.has_variants ? listVariants(item.id)[0]?.id ?? null : null);
+          const variant = variantId ? listVariants(item.id).find((v) => v.id === variantId) ?? null : null;
+          components.push({ slot_id: slot.id, slot_name: slot.name, menu_item_id: item.id, variant_id: variant?.id ?? null, name: item.name, variant_name: variant?.name ?? null });
+        }
+        if (!ok) {
+          missing.push(ci.name);
+          continue;
+        }
+        lines.push({ ...dealLine(deal, components), quantity: Math.max(1, ci.quantity) });
+        continue;
+      }
+      const item = ci.menu_item_id ? getMenuItem(ci.menu_item_id) : null;
       if (!item || item.deleted_at || !item.is_active) {
         missing.push(ci.name);
         continue;
@@ -50,15 +80,7 @@ export default function ClaimedOrderScreen() {
         missing.push(ci.name);
         continue;
       }
-      lines.push({
-        key: `${item.id}:${variant?.id ?? ''}`,
-        menu_item_id: item.id,
-        variant_id: variant?.id ?? null,
-        name: item.name,
-        variant_name: variant?.name ?? null,
-        unit_price: variant ? variant.price : item.base_price,
-        quantity: Math.max(1, ci.quantity),
-      });
+      lines.push({ ...itemLine(item, variant), quantity: Math.max(1, ci.quantity) });
     }
     cart.replaceLines(lines);
     cart.setNote(clampNote(customerOrder.note ?? ''));
@@ -68,7 +90,8 @@ export default function ClaimedOrderScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerOrder?.id]);
 
-  const total = cartSubtotal(cart.lines);
+  const totals = computeTotals(cart.lines, cart.coupon);
+  const total = totals.total;
   const preview = useMemo(
     () =>
       draftToOrder(draft, cart.lines, {
@@ -80,8 +103,9 @@ export default function ClaimedOrderScreen() {
         source: 'qr',
         tableCode: customerOrder?.table_code ?? null,
         customerOrderId: customerOrder?.id ?? null,
+        coupon: cart.coupon,
       }),
-    [draft, cart.lines, cart.note, cart.amountReceived, cart.paymentMethod, profile?.id, customerOrder?.table_code, customerOrder?.id]
+    [draft, cart.lines, cart.note, cart.amountReceived, cart.paymentMethod, cart.coupon, profile?.id, customerOrder?.table_code, customerOrder?.id]
   );
 
   if (!customerOrder) {
@@ -113,6 +137,7 @@ export default function ClaimedOrderScreen() {
         source: 'qr',
         customerOrderId: customerOrder.id,
         tableCode: customerOrder.table_code,
+        coupon: cart.coupon,
       });
       try {
         await completeCustomerOrder(customerOrder.id, result.order.id);
@@ -184,9 +209,8 @@ export default function ClaimedOrderScreen() {
           </View>
         ) : null}
         <Divider style={{ marginVertical: 0 }} />
-        <View style={[row, { justifyContent: 'space-between', padding: spacing.md }]}>
-          <AppText variant="heading">{t('total')}</AppText>
-          <AppText variant="heading">{formatMoney(total, currency)}</AppText>
+        <View style={{ padding: spacing.md }}>
+          <TotalsSummary totals={totals} currency={currency} />
         </View>
       </Card>
       <Card>

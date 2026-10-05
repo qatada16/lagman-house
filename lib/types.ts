@@ -129,6 +129,7 @@ export interface ReceiptTemplateConfig {
   total: { show: boolean; showSubtotal: boolean; style: 'plain' | 'bold' | 'double'; label: string };
   amountReceived: { show: boolean; showChange: boolean };
   paymentMethod: { show: boolean };
+  savings: { show: boolean; label: string; showCoupon: boolean };
   footer: { lines: string[] };
   testWatermark: boolean;
   feedLines: number;
@@ -161,6 +162,11 @@ export interface Order {
   amount_received: number | null;
   payment_method: PaymentMethod | null;
   note: string | null;
+  item_discount_total: number;
+  coupon_id: string | null;
+  coupon_code: string | null;
+  coupon_discount: number;
+  savings_total: number;
   is_test: boolean;
   stock_deducted: boolean;
   device_id: string | null;
@@ -180,17 +186,24 @@ export interface OrderItem {
   unit_price: number;
   quantity: number;
   line_total: number;
+  parent_item_id: string | null;
+  deal_id: string | null;
+  original_unit_price: number | null;
+  discount_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface CustomerOrderItem {
-  menu_item_id: string;
-  variant_id: string | null;
+  menu_item_id?: string;
+  variant_id?: string | null;
+  deal_id?: string;
+  components?: { slot_id: string; menu_item_id: string; variant_id: string | null; name: string; variant_name: string | null }[];
   name: string;
-  variant_name: string | null;
+  variant_name?: string | null;
   quantity: number;
   unit_price: number;
+  original_unit_price?: number;
 }
 
 export interface CustomerOrder {
@@ -208,14 +221,108 @@ export interface CustomerOrder {
   updated_at: string;
 }
 
-export interface CartLine {
-  key: string;
+export interface CartComponent {
+  slot_id: string;
+  slot_name: string;
   menu_item_id: string;
   variant_id: string | null;
   name: string;
   variant_name: string | null;
+}
+
+export interface CartLine {
+  key: string;
+  menu_item_id: string | null;
+  variant_id: string | null;
+  name: string;
+  variant_name: string | null;
   unit_price: number;
+  original_unit_price: number;
+  discount_id: string | null;
   quantity: number;
+  deal_id: string | null;
+  components: CartComponent[];
+}
+
+export type PromoKind = 'fixed' | 'percent';
+
+export interface DealOption {
+  menu_item_id: string;
+  variant_id: string | null;
+}
+
+export interface DealSlot {
+  id: string;
+  admin_id: string;
+  deal_id: string;
+  name: string;
+  sort_order: number;
+  options: DealOption[];
+  default_index: number;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Deal {
+  id: string;
+  admin_id: string;
+  name: string;
+  name_ur: string | null;
+  description: string | null;
+  image_url: string | null;
+  price: number;
+  is_active: boolean;
+  sort_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Discount {
+  id: string;
+  admin_id: string;
+  name: string;
+  kind: PromoKind;
+  value: number;
+  item_ids: string[];
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Coupon {
+  id: string;
+  admin_id: string;
+  code: string;
+  name: string | null;
+  kind: PromoKind;
+  value: number;
+  min_order: number;
+  max_discount: number | null;
+  max_uses: number | null;
+  uses_count: number;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppRelease {
+  id: string;
+  version: string;
+  build_number: number;
+  apk_url: string | null;
+  notes: string | null;
+  mandatory: boolean;
+  released_at: string;
 }
 
 export interface RestaurantSettings {

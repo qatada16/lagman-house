@@ -188,6 +188,9 @@ export default function TemplateEditScreen() {
             <Toggle label={t('showAmountReceived')} value={cfg.amountReceived.show} onChange={(v) => patch('amountReceived', { show: v })} />
             <Toggle label={t('showChange')} value={cfg.amountReceived.showChange} disabled={!cfg.amountReceived.show} onChange={(v) => patch('amountReceived', { showChange: v })} />
             <Toggle label={t('showPaymentMethod')} value={cfg.paymentMethod.show} onChange={(v) => patch('paymentMethod', { show: v })} />
+            <Toggle label={t('showSavings')} value={cfg.savings.show} onChange={(v) => patch('savings', { show: v })} />
+            <Toggle label={t('showCouponLine')} value={cfg.savings.showCoupon} onChange={(v) => patch('savings', { showCoupon: v })} />
+            <Input label={t('savingsLabel')} value={cfg.savings.label} onChangeText={(v) => patch('savings', { label: v })} />
           </Card>
 
           <Card title={t('sectionNote')}>

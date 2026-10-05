@@ -163,6 +163,75 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(occurred_at);
 
+CREATE TABLE IF NOT EXISTS deals (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  name_ur TEXT,
+  description TEXT,
+  image_url TEXT,
+  price REAL NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  starts_at TEXT,
+  ends_at TEXT,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS deal_slots (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  deal_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  options TEXT NOT NULL DEFAULT '[]',
+  default_index INTEGER NOT NULL DEFAULT 0,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_deal_slots_deal ON deal_slots(deal_id);
+
+CREATE TABLE IF NOT EXISTS discounts (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value REAL NOT NULL,
+  item_ids TEXT NOT NULL DEFAULT '[]',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  starts_at TEXT,
+  ends_at TEXT,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  code TEXT NOT NULL,
+  name TEXT,
+  kind TEXT NOT NULL,
+  value REAL NOT NULL,
+  min_order REAL NOT NULL DEFAULT 0,
+  max_discount REAL,
+  max_uses INTEGER,
+  uses_count INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  starts_at TEXT,
+  ends_at TEXT,
+  deleted_at TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  is_dirty INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS receipt_templates (
   id TEXT PRIMARY KEY,
   admin_id TEXT,
@@ -190,6 +259,11 @@ CREATE TABLE IF NOT EXISTS orders (
   amount_received REAL,
   payment_method TEXT,
   note TEXT,
+  item_discount_total REAL NOT NULL DEFAULT 0,
+  coupon_id TEXT,
+  coupon_code TEXT,
+  coupon_discount REAL NOT NULL DEFAULT 0,
+  savings_total REAL NOT NULL DEFAULT 0,
   is_test INTEGER NOT NULL DEFAULT 0,
   stock_deducted INTEGER NOT NULL DEFAULT 0,
   device_id TEXT,
@@ -212,6 +286,10 @@ CREATE TABLE IF NOT EXISTS order_items (
   unit_price REAL NOT NULL DEFAULT 0,
   quantity INTEGER NOT NULL DEFAULT 1,
   line_total REAL NOT NULL DEFAULT 0,
+  parent_item_id TEXT,
+  deal_id TEXT,
+  original_unit_price REAL,
+  discount_id TEXT,
   created_at TEXT,
   updated_at TEXT,
   is_dirty INTEGER NOT NULL DEFAULT 0
@@ -229,6 +307,10 @@ const TENANT_TABLES = [
   'stock_purchases',
   'expenses',
   'receipt_templates',
+  'deals',
+  'deal_slots',
+  'discounts',
+  'coupons',
   'orders',
   'order_items',
   'profiles',
@@ -246,6 +328,15 @@ const COLUMN_MIGRATIONS: [string, string, string][] = [
   ['stock_items', 'admin_id', 'TEXT'],
   ['stock_links', 'admin_id', 'TEXT'],
   ['receipt_templates', 'admin_id', 'TEXT'],
+  ['orders', 'item_discount_total', 'REAL NOT NULL DEFAULT 0'],
+  ['orders', 'coupon_id', 'TEXT'],
+  ['orders', 'coupon_code', 'TEXT'],
+  ['orders', 'coupon_discount', 'REAL NOT NULL DEFAULT 0'],
+  ['orders', 'savings_total', 'REAL NOT NULL DEFAULT 0'],
+  ['order_items', 'parent_item_id', 'TEXT'],
+  ['order_items', 'deal_id', 'TEXT'],
+  ['order_items', 'original_unit_price', 'REAL'],
+  ['order_items', 'discount_id', 'TEXT'],
 ];
 
 let initialized = false;

@@ -711,6 +711,7 @@ export const en = {
   showCancelled: 'Show cancelled orders',
   showCancelledHint: 'Revenue and charts always count completed orders only.',
   colEdits: 'Edits',
+  navPos: 'New order',
 } as const;
 
 export type StringKey = keyof typeof en;

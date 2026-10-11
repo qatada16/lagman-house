@@ -143,7 +143,11 @@ export default function HistoryScreen() {
       <Card>
         <PeriodPicker state={state} />
         <View style={{ height: spacing.sm }} />
-        <Select label={t('filterCashier')} value={cashierId} onChange={setCashierId} options={[{ value: 'all', label: t('allCashiers') }, ...data.cashierList.map((c) => ({ value: c.id, label: c.name }))]} />
+        <Select label={t('filterCashier')} value={cashierId} onChange={setCashierId} options={[
+            { value: 'all', label: t('allCashiers') },
+            ...(profile ? [{ value: profile.id, label: `${profile.name} (${t('roleAdmin')})` }] : []),
+            ...data.cashierList.map((c) => ({ value: c.id, label: c.name })),
+          ]} />
         <Toggle label={t('includeTest')} value={includeTest} onChange={setIncludeTest} />
         <Toggle label={t('showCancelled')} hint={t('showCancelledHint')} value={showCancelled} onChange={setShowCancelled} />
       </Card>

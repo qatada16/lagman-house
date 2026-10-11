@@ -10,7 +10,7 @@ public QR web menu for customer self-ordering.
 app/                 Expo Router routes
   (auth)/            login, signup, verify-email, forgot-password
   auth/              email link landings: callback (signup), reset (choose a new password)
-  (admin)/           dashboard, cashiers, menu, stock, templates, printer, history, qr, settings, account
+  (admin)/           dashboard, new order (pos), recent orders, cashiers, menu, stock, templates, printer, history, qr, settings, account
   (cashier)/         menu + cart, cart review, customer-order queue, account, settings
   pending.tsx        locked screen for non-active cashiers
   phone/             link and verify a phone number
@@ -44,6 +44,9 @@ web/                 static public menu page (QR ordering)
 
 - Every admin is a separate tenant. Menu, stock, receipt templates, settings, orders, expenses and
   customer orders are fully segregated; an admin never sees another admin's data, and neither do their cashiers.
+- Admins can take orders too: drawer -> New order opens the same menu, cart and checkout as the cashier screen.
+  The order is recorded under the admin's name, appears in History (filter by the admin) and counts toward revenue
+  and stock like any other order.
 - Cashiers choose their admin at signup and become part of that admin's tenant. Only that admin is notified,
   approves them, and sees their orders.
 - Anyone can delete their own account from Account -> Delete account. Orders are kept for the records.

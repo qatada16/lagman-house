@@ -1,6 +1,6 @@
 {
   "name": "lagman-house",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

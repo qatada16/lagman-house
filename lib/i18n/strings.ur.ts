@@ -713,4 +713,5 @@ export const ur: Record<StringKey, string> = {
   showCancelled: 'منسوخ شدہ آرڈرز دکھائیں',
   showCancelledHint: 'آمدنی اور چارٹس ہمیشہ صرف مکمل آرڈرز شمار کرتے ہیں۔',
   colEdits: 'تبدیلیاں',
+  navPos: 'نیا آرڈر',
 };

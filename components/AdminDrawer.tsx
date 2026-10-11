@@ -27,6 +27,7 @@ interface Item {
 
 export const ADMIN_ITEMS: Item[] = [
   { key: 'navDashboard', icon: 'grid', href: '/(admin)', match: (p) => p === '/' || p === '' },
+  { key: 'navPos', icon: 'shopping-cart', href: '/(admin)/pos', match: (p) => p.startsWith('/pos') },
   { key: 'navOrders', icon: 'clock', href: '/(admin)/orders', match: (p) => p.startsWith('/orders') },
   { key: 'navCashiers', icon: 'users', href: '/(admin)/cashiers', match: (p) => p.startsWith('/cashiers') },
   { key: 'navMenu', icon: 'book-open', href: '/(admin)/menu', match: (p) => p.startsWith('/menu') },

@@ -48,3 +48,6 @@ yarn-error.*
 # owner reference material
 IMAGES/
 .claude
+
+# Ignore VS Code local workspace settings
+.vscode/*

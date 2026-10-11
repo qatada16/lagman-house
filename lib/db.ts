@@ -416,7 +416,7 @@ export function clearUserData() {
   transaction(() => {
     for (const t of TENANT_TABLES) run(`DELETE FROM ${t}`);
     run('DELETE FROM sync_meta');
-    run("DELETE FROM kv WHERE key IN ('current_user_id', 'last_sync_at')");
+    run("DELETE FROM kv WHERE key IN ('current_user_id', 'last_sync_at', 'data_owner_id')");
   });
 }
 

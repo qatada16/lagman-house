@@ -4,15 +4,28 @@ import { Feather } from '@expo/vector-icons';
 import { AppText, Button } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, radius, spacing } from '@/constants/theme';
-import { currentVersion, useUpdateCheck } from '@/features/app/useUpdateCheck';
+import { formatInstalledVersion, isSafeDownloadUrl, useUpdateCheck } from '@/features/app/useUpdateCheck';
+import { toast } from '@/store/toastStore';
 
 export function UpdateModal() {
   const t = useT();
   const { row } = useLayout();
-  const { release, dismiss } = useUpdateCheck();
+  const { release, dismiss, opened } = useUpdateCheck();
   if (!release) return null;
+  const latest = release.build_number > 0 ? `${release.version} (${release.build_number})` : release.version;
+
+  const download = async () => {
+    if (!isSafeDownloadUrl(release.apk_url)) return;
+    try {
+      await Linking.openURL(release.apk_url);
+      opened();
+    } catch {
+      toast.error(t('updateOpenFailed'));
+    }
+  };
+
   return (
-    <Modal transparent animationType="fade" visible statusBarTranslucent onRequestClose={() => (release.mandatory ? undefined : void dismiss())}>
+    <Modal transparent animationType="fade" visible statusBarTranslucent onRequestClose={() => (release.mandatory ? undefined : dismiss())}>
       <View style={styles.backdrop}>
         <View style={styles.dialog}>
           <View style={styles.iconWrap}>
@@ -22,7 +35,7 @@ export function UpdateModal() {
             {t('updateAvailable')}
           </AppText>
           <AppText align="center" color={colors.textSecondary}>
-            {t('updateBody', { latest: release.version, current: currentVersion() })}
+            {t('updateBody', { latest, current: formatInstalledVersion() })}
           </AppText>
           {release.mandatory ? (
             <AppText variant="small" align="center" color={colors.danger}>
@@ -37,9 +50,12 @@ export function UpdateModal() {
               <AppText variant="small">{release.notes}</AppText>
             </View>
           ) : null}
+          <AppText variant="small" align="center">
+            {t('updateInstallHint')}
+          </AppText>
           <View style={[styles.actions, row]}>
-            {!release.mandatory ? <Button title={t('updateLater')} variant="outline" onPress={() => void dismiss()} style={{ flex: 1 }} /> : null}
-            {release.apk_url ? <Button title={t('updateDownload')} variant="action" icon="download" onPress={() => void Linking.openURL(release.apk_url!)} style={{ flex: 1 }} /> : null}
+            {!release.mandatory ? <Button title={t('updateLater')} variant="outline" onPress={dismiss} style={{ flex: 1 }} /> : null}
+            <Button title={t('updateDownload')} variant="action" icon="download" onPress={() => void download()} style={{ flex: 1 }} />
           </View>
         </View>
       </View>

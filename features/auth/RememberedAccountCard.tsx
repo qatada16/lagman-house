@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Indicators';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, radius, spacing } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { signOutSettled } from '@/store/authStore';
 import { forgetRememberedAccount, getRememberedAccount, quickSignIn, type RememberedAccount } from './rememberedAccount';
 
 interface Props {
@@ -34,6 +35,7 @@ export function RememberedAccountCard({ onExpired, onError }: Props) {
     }
     setBusy(true);
     try {
+      await signOutSettled();
       const result = await quickSignIn(`${t('quickLoginPrompt')}: ${account.name}`);
       if (result === 'expired') {
         onExpired(account.email ?? account.phone ?? '');

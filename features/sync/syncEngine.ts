@@ -19,6 +19,10 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 type Row = Record<string, unknown>;
 
+function assertLive() {
+  if (aborted) throw new Error('aborted');
+}
+
 export interface SyncResult {
   ok: boolean;
   pulled: number;
@@ -55,6 +59,7 @@ async function pullTable(t: SyncTable): Promise<number> {
       .gt('updated_at', since)
       .order('updated_at', { ascending: true })
       .range(from, from + PAGE - 1);
+    assertLive();
     if (error) throw new Error(`${t.name}: ${error.message}`);
     const rows = (data ?? []) as Row[];
     for (const row of rows) {
@@ -80,10 +85,12 @@ async function pushRows(t: SyncTable, rows: Row[]) {
   if (t.pushMode === 'update') {
     for (const r of payload) {
       const { error } = await supabase.from(t.name).update(r).eq('id', r.id as string);
+      assertLive();
       if (error) throw new Error(`${t.name}: ${error.message}`);
     }
   } else {
     const { error } = await supabase.from(t.name).upsert(payload, { onConflict: 'id' });
+    assertLive();
     if (error) throw new Error(`${t.name}: ${error.message}`);
   }
   for (const r of rows) {
@@ -101,12 +108,14 @@ async function pushTable(t: SyncTable): Promise<number> {
       await pushRows(t, chunk);
       pushed += chunk.length;
     } catch (e) {
+      assertLive();
       // Fall back to single rows so one bad row does not block the rest.
       for (const r of chunk) {
         try {
           await pushRows(t, [r]);
           pushed++;
         } catch (inner) {
+          assertLive();
           console.warn('[sync] row push failed', t.name, r.id, (inner as Error).message);
           throw inner;
         }
@@ -125,6 +134,7 @@ async function reconcileStock(): Promise<boolean> {
   let touched = false;
   for (const o of orders) {
     const { error } = await supabase.rpc('deduct_stock_for_order', { p_order_id: o.id });
+    assertLive();
     if (error) throw new Error(`deduct_stock_for_order: ${error.message}`);
     run('UPDATE orders SET stock_deducted = 1 WHERE id = ?', [o.id]);
     touched = true;
@@ -173,6 +183,7 @@ export async function runSync(reason = 'manual'): Promise<SyncResult> {
       const stock = SYNC_TABLES.find((t) => t.name === 'stock_items');
       if (stock) pulled += await pullTable(stock);
     }
+    assertLive();
     const now = nowIso();
     kvSet('last_sync_at', now);
     backoffIndex = 0;

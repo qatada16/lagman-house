@@ -59,7 +59,7 @@ export async function updateRememberedToken(userId: string, refreshToken: string
 }
 
 // Revokes the stored session on the server without touching the client's own auth state.
-async function revokeRefreshToken(refreshToken: string) {
+export async function revokeRefreshToken(refreshToken: string) {
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',

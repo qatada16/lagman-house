@@ -16,6 +16,7 @@ export function useAuthGate() {
   const status = useAuthStore((s) => s.status);
   const profile = useAuthStore((s) => s.profile);
   const resolving = useAuthStore((s) => s.resolving);
+  const recovery = useAuthStore((s) => s.recovery);
   const segments = useSegments();
   const router = useRouter();
   const navReady = !!useRootNavigationState()?.key;
@@ -29,9 +30,17 @@ export function useAuthGate() {
     const inCashier = first === '(cashier)';
     const inPending = first === 'pending';
     const inShared = !!first && SHARED_SEGMENTS.has(first);
+    const onReset = first === 'auth' && (segments as string[])[1] === 'reset';
 
+    if (recovery) {
+      if (onReset) return;
+      if (recovery !== 'invalid') {
+        router.replace('/auth/reset');
+        return;
+      }
+    }
     if (area === 'auth') {
-      if (!inAuth) router.replace('/(auth)/login');
+      if (!inAuth || onReset) router.replace('/(auth)/login');
       return;
     }
     if (area === 'pending') {
@@ -41,5 +50,5 @@ export function useAuthGate() {
     if (inShared) return;
     if (area === 'admin' && !inAdmin) router.replace('/(admin)');
     if (area === 'cashier' && !inCashier) router.replace('/(cashier)');
-  }, [status, profile, resolving, segments, router, navReady]);
+  }, [status, profile, resolving, recovery, segments, router, navReady]);
 }

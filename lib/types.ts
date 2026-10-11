@@ -319,10 +319,12 @@ export interface AppRelease {
   id: string;
   version: string;
   build_number: number;
-  apk_url: string | null;
+  build_id: string | null;
+  apk_url: string;
   notes: string | null;
   mandatory: boolean;
   released_at: string;
+  expires_at: string | null;
 }
 
 export interface RestaurantSettings {

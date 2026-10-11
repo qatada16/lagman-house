@@ -115,12 +115,6 @@ create table if not exists public.app_releases (
   released_at timestamptz not null default now()
 );
 
-create or replace function public.latest_release() returns jsonb
-language sql stable security definer set search_path = public as $$
-  select coalesce((select to_jsonb(r) from public.app_releases r order by released_at desc limit 1), 'null'::jsonb);
-$$;
-grant execute on function public.latest_release() to anon, authenticated;
-
 alter table public.deals enable row level security;
 alter table public.deal_slots enable row level security;
 alter table public.discounts enable row level security;
@@ -152,7 +146,6 @@ create policy coupons_write on public.coupons for all to authenticated
   using (public.is_admin() and admin_id = public.tenant_id()) with check (public.is_admin() and admin_id = public.tenant_id());
 
 drop policy if exists app_releases_admin on public.app_releases;
-create policy app_releases_admin on public.app_releases for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Effective price for an item or size after active discounts.
 create or replace function public.discounted_price(p_admin uuid, p_item uuid, p_price numeric)

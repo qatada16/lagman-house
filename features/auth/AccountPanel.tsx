@@ -9,7 +9,7 @@ import { colors, spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useSyncStore } from '@/store/syncStore';
 import { updateOwnProfileLocal } from './profileRepo';
-import { deleteOwnAccount, updatePassword, uploadAvatarAndSave, validatePassword } from './authApi';
+import { deleteOwnAccount, describeAuthError, updatePassword, uploadAvatarAndSave, validatePassword } from './authApi';
 import { pickImage } from '@/features/menu/useImagePick';
 import { confirm } from '@/lib/confirm';
 import { formatDate } from '@/lib/format';
@@ -64,7 +64,9 @@ export function AccountPanel() {
       setPassword('');
       toast.success(t('passwordUpdated'));
     } catch (e) {
-      toast.error((e as Error).message);
+      const message = (e as Error).message;
+      const kind = describeAuthError(message);
+      toast.error(kind === 'error' || kind === 'wrongCode' || kind === 'resetInvalid' ? message : t(kind));
     } finally {
       setBusy(false);
     }

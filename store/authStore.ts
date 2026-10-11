@@ -1,14 +1,18 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
-import { clearUserData, initDb } from '@/lib/db';
+import { SESSION_STORAGE_KEY, supabase } from '@/lib/supabase';
+import { confirm } from '@/lib/confirm';
+import { translate } from '@/lib/i18n';
+import { clearUserData, initDb, kvGet, kvSet } from '@/lib/db';
 import type { Profile } from '@/lib/types';
 import { cacheProfile, getCachedProfile, getCurrentUserId, setCurrentUserId } from '@/features/auth/profileRepo';
-import { abortSync, resetSyncState } from '@/features/sync/syncEngine';
-import { clearLocalSession, forgetRememberedAccount, getRememberedAccount, rememberAccount, updateRememberedToken } from '@/features/auth/rememberedAccount';
+import { abortSync, countPending, resetSyncState } from '@/features/sync/syncEngine';
+import { clearLocalSession, forgetRememberedAccount, getRememberedAccount, rememberAccount, revokeRefreshToken, updateRememberedToken } from '@/features/auth/rememberedAccount';
 import { useLanguageStore } from './languageStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
+export type RecoveryState = 'pending' | 'active' | 'invalid' | null;
 
 interface AuthState {
   status: Status;
@@ -17,17 +21,66 @@ interface AuthState {
   resolving: boolean;
   pendingPhotoUri: string | null;
   pendingCredentials: { email: string; password: string } | null;
+  recovery: RecoveryState;
   init: () => Promise<void>;
-  applySession: (session: Session | null) => Promise<void>;
+  applySession: (session: Session | null) => Promise<boolean>;
   refreshProfile: () => Promise<Profile | null>;
   setProfile: (p: Profile) => void;
   setPendingPhoto: (uri: string | null) => void;
   setPendingCredentials: (c: { email: string; password: string } | null) => void;
-  signOut: (opts?: { forget?: boolean }) => Promise<void>;
+  setRecovery: (r: RecoveryState) => void;
+  signOut: (opts?: { forget?: boolean; keepRecovery?: boolean }) => Promise<void>;
 }
 
 let profileChannel: RealtimeChannel | null = null;
 let listening = false;
+const DATA_OWNER_KEY = 'data_owner_id';
+let signOutTask: Promise<void> = Promise.resolve();
+
+let ownerDecision: { userId: string; promise: Promise<boolean> } | null = null;
+
+export function signOutSettled() {
+  return signOutTask;
+}
+
+async function readStoredSession(): Promise<{ refresh_token?: string } | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as { refresh_token?: string }) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function discardStoredSession() {
+  const stored = await readStoredSession();
+  await clearLocalSession();
+  if (stored?.refresh_token) void revokeRefreshToken(stored.refresh_token);
+}
+
+async function confirmDataOwnerChange(owner: string) {
+  const pending = countPending();
+  if (pending === 0) return true;
+  const lang = useLanguageStore.getState().lang;
+  const name = getCachedProfile(owner)?.name ?? translate(lang, 'anotherAccount');
+  return confirm(
+    translate(lang, 'unsyncedOtherTitle'),
+    translate(lang, 'unsyncedOtherBody', { name, count: pending }),
+    translate(lang, 'deleteAndContinue'),
+    translate(lang, 'cancel'),
+    true
+  );
+}
+
+function decideDataOwner(owner: string, userId: string) {
+  if (ownerDecision && ownerDecision.userId === userId) return ownerDecision.promise;
+  const decision = { userId, promise: confirmDataOwnerChange(owner) };
+  ownerDecision = decision;
+  void decision.promise.finally(() => {
+    if (ownerDecision === decision) ownerDecision = null;
+  });
+  return decision.promise;
+}
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
@@ -52,6 +105,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   resolving: false,
   pendingPhotoUri: null,
   pendingCredentials: null,
+  recovery: null,
 
   init: async () => {
     initDb();
@@ -63,7 +117,9 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
       listening = true;
       supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') {
-          set({ status: 'signedOut', session: null, profile: null });
+          abortSync();
+          setCurrentUserId(null);
+          set({ status: 'signedOut', session: null, profile: null, resolving: false, recovery: getState().recovery === 'active' ? 'invalid' : getState().recovery });
           return;
         }
         if (session && event === 'TOKEN_REFRESHED') void updateRememberedToken(session.user.id, session.refresh_token);
@@ -93,16 +149,35 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
   },
 
   applySession: async (session) => {
-    if (!session) return;
-    set({ session });
+    if (!session) return false;
     const userId = session.user.id;
+    const owner = kvGet(DATA_OWNER_KEY);
+    if (owner && owner !== userId) {
+      abortSync();
+      if (!(await decideDataOwner(owner, userId))) {
+        if (getState().session?.user.id !== userId) {
+          signOutTask = signOutTask.then(discardStoredSession).catch(() => undefined);
+          await signOutTask;
+        }
+        set({ status: 'signedOut', session: null, profile: null, resolving: false });
+        return false;
+      }
+      if (kvGet(DATA_OWNER_KEY) === owner) {
+        clearUserData();
+        resetSyncState();
+        set({ profile: null });
+      }
+    }
+    kvSet(DATA_OWNER_KEY, userId);
+    supabase.auth.startAutoRefresh();
+    set({ session });
     const cached = getCachedProfile(userId);
     if (cached) set({ profile: cached, status: 'signedIn' });
     else set({ resolving: true });
     setCurrentUserId(userId);
 
     const fresh = await fetchProfile(userId);
-    if (useAuthStore.getState().session?.user.id !== userId) return;
+    if (useAuthStore.getState().session?.user.id !== userId) return true;
     if (fresh) {
       cacheProfile(fresh);
       set({ profile: fresh, status: 'signedIn', resolving: false });
@@ -119,11 +194,12 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
       }
     }
     const known = getState().profile;
-    if (known && known.id === userId) void rememberAccount(known, session.refresh_token).catch(() => undefined);
+    if (known && known.id === userId && !getState().recovery) void rememberAccount(known, session.refresh_token).catch(() => undefined);
     subscribeToOwnProfile(userId, (p) => {
       cacheProfile(p);
       set({ profile: p });
     });
+    return true;
   },
 
   refreshProfile: async () => {
@@ -144,6 +220,7 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
 
   setPendingPhoto: (uri) => set({ pendingPhotoUri: uri }),
   setPendingCredentials: (c) => set({ pendingCredentials: c }),
+  setRecovery: (r) => set({ recovery: r }),
 
   signOut: async (opts) => {
     abortSync();
@@ -155,18 +232,28 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
     setCurrentUserId(null);
     clearUserData();
     resetSyncState();
-    set({ status: 'signedOut', session: null, profile: null, resolving: false, pendingPhotoUri: null, pendingCredentials: null });
-    void (async () => {
+    set({
+      status: 'signedOut',
+      session: null,
+      profile: null,
+      resolving: false,
+      pendingPhotoUri: null,
+      pendingCredentials: null,
+      recovery: opts?.keepRecovery ? getState().recovery : null,
+    });
+    const previous = signOutTask;
+    signOutTask = (async () => {
+      await previous;
+      supabase.auth.stopAutoRefresh();
+      const stored = await readStoredSession();
       const remembered = opts?.forget ? null : await getRememberedAccount();
       if (remembered && remembered.id === userId) {
-        supabase.auth.stopAutoRefresh();
-        const { data } = await supabase.auth.getSession();
-        if (data.session) await updateRememberedToken(remembered.id, data.session.refresh_token);
+        if (stored?.refresh_token) await updateRememberedToken(remembered.id, stored.refresh_token);
         await clearLocalSession();
         return;
       }
       if (opts?.forget) await forgetRememberedAccount(false);
-      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
-    })();
+      await discardStoredSession();
+    })().catch(() => undefined);
   },
 }));

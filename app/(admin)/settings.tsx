@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import Constants from 'expo-constants';
 import { AppText, Button, Card, Input, Screen } from '@/components/ui';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { SyncPanel } from '@/features/settings/SyncPanel';
@@ -8,6 +7,7 @@ import { useLayout, useT } from '@/lib/i18n';
 import { spacing } from '@/constants/theme';
 import { getSettings, saveSettings } from '@/features/settings/settingsRepo';
 import { getDeviceCode, getDeviceId } from '@/lib/device';
+import { formatInstalledVersion } from '@/features/app/useUpdateCheck';
 import { toast } from '@/store/toastStore';
 
 export default function AdminSettingsScreen() {
@@ -39,7 +39,7 @@ export default function AdminSettingsScreen() {
       <Card title={t('aboutSection')}>
         <View style={[row, { justifyContent: 'space-between' }]}>
           <AppText variant="small">{t('version')}</AppText>
-          <AppText variant="small">{Constants.expoConfig?.version ?? '-'}</AppText>
+          <AppText variant="small">{formatInstalledVersion()}</AppText>
         </View>
         <View style={[row, { justifyContent: 'space-between' }]}>
           <AppText variant="small">{t('deviceId')}</AppText>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { AuthFrame } from '@/components/AuthFrame';
 import { AppText, Button, Input } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
@@ -13,6 +13,7 @@ import { RememberedAccountCard } from '@/features/auth/RememberedAccountCard';
 export default function LoginScreen() {
   const t = useT();
   const { row } = useLayout();
+  const router = useRouter();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -72,11 +73,21 @@ export default function LoginScreen() {
         right={
           <Pressable onPress={() => setShowPw((v) => !v)} hitSlop={8}>
             <AppText variant="small" color={colors.action}>
-              {showPw ? 'Hide' : 'Show'}
+              {showPw ? t('hide') : t('show')}
             </AppText>
           </Pressable>
         }
       />
+      <View style={[row, { justifyContent: 'flex-end' }]}>
+        <Pressable
+          hitSlop={8}
+          onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: identifier.includes('@') ? { email: identifier.trim() } : {} })}
+        >
+          <AppText variant="small" color={colors.action} weight="600">
+            {t('forgotPassword')}
+          </AppText>
+        </Pressable>
+      </View>
       {error ? (
         <AppText variant="small" color={colors.danger}>
           {error}

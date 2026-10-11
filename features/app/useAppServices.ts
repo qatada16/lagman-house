@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
+import NetInfo from '@react-native-community/netinfo';
 import { useAuthStore } from '@/store/authStore';
 import { usePrinterStore } from '@/store/printerStore';
 import { useCustomerOrderStore } from '@/store/customerOrderStore';
@@ -9,8 +10,10 @@ import { runSync } from '@/features/sync/syncEngine';
 import { addNotificationListeners, registerForPush } from '@/features/notifications/push';
 import { toast } from '@/store/toastStore';
 import { translate } from '@/lib/i18n';
-import { sessionFromUrl } from '@/features/auth/authApi';
+import { isResetUrl, sessionFromUrl } from '@/features/auth/authApi';
+import { beginRecovery } from '@/features/auth/recovery';
 import { useLanguageStore } from '@/store/languageStore';
+import { useSyncStore } from '@/store/syncStore';
 
 // Starts background services once the user is signed in; tears them down on sign-out.
 export function useAppServices() {
@@ -24,8 +27,19 @@ export function useAppServices() {
   }, []);
 
   useEffect(() => {
+    return NetInfo.addEventListener((state) => {
+      const online = !!state.isConnected && state.isInternetReachable !== false;
+      if (useSyncStore.getState().online !== online) useSyncStore.getState().set({ online });
+    });
+  }, []);
+
+  useEffect(() => {
     const handle = async (url: string | null) => {
       if (!url) return;
+      if (isResetUrl(url)) {
+        await beginRecovery(url);
+        return;
+      }
       const result = await sessionFromUrl(url);
       const lang = useLanguageStore.getState().lang;
       if (result === 'error') toast.error(translate(lang, 'wrongCode'));

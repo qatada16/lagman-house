@@ -12,6 +12,7 @@ import { useAuthGate } from '@/features/auth/useAuthGate';
 import { useAppServices } from '@/features/app/useAppServices';
 import { ToastHost } from '@/components/ui';
 import { ConfirmHost } from '@/components/ui/ConfirmHost';
+import { UpdateModal } from '@/components/UpdateModal';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -56,6 +57,7 @@ export default function RootLayout() {
           </Stack>
           <ToastHost />
           <ConfirmHost />
+          {ready ? <UpdateModal /> : null}
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>

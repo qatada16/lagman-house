@@ -9,6 +9,7 @@ import { AppText } from '@/components/ui';
 
 const TABS: { key: StringKey; icon: keyof typeof Feather.glyphMap; href: string; match: (p: string) => boolean }[] = [
   { key: 'tabMenu', icon: 'grid', href: '/(cashier)', match: (p) => p === '/' || p === '' || p.startsWith('/cart') || p.startsWith('/queue') },
+  { key: 'tabOrders', icon: 'clock', href: '/(cashier)/orders', match: (p) => p.startsWith('/orders') },
   { key: 'tabAccount', icon: 'user', href: '/(cashier)/account', match: (p) => p.startsWith('/account') },
   { key: 'tabSettings', icon: 'settings', href: '/(cashier)/settings', match: (p) => p.startsWith('/settings') },
 ];

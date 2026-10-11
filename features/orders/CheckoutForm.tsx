@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { AppText, Badge, Button, Input, Segmented, Toggle } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, radius, spacing } from '@/constants/theme';
-import { countWords, NOTE_WORD_LIMIT, useCartStore } from '@/store/cartStore';
+import { countWords, NOTE_WORD_LIMIT, useCart } from '@/store/cartStore';
 import { formatMoney } from '@/lib/format';
 import { findCouponByCode, listCoupons } from '@/features/promos/promoRepo';
 import { cartSubtotal, couponDiscount, couponProblem, type CouponProblem } from '@/features/promos/pricing';
@@ -19,32 +19,46 @@ const PROBLEM_KEY: Record<CouponProblem, 'couponInactive' | 'couponExpired' | 'c
   minOrder: 'couponMinOrder',
 };
 
-export function CheckoutForm({ total, currency, showTestToggle = true, showNote = true }: { total: number; currency: string; showTestToggle?: boolean; showNote?: boolean }) {
+export function CheckoutForm({
+  total,
+  currency,
+  showTestToggle = true,
+  showNote = true,
+  lockedCouponId = null,
+}: {
+  total: number;
+  currency: string;
+  showTestToggle?: boolean;
+  showNote?: boolean;
+  lockedCouponId?: string | null;
+}) {
   const t = useT();
   const { row } = useLayout();
-  const note = useCartStore((s) => s.note);
-  const setNote = useCartStore((s) => s.setNote);
-  const isTest = useCartStore((s) => s.isTest);
-  const setIsTest = useCartStore((s) => s.setIsTest);
-  const amountReceived = useCartStore((s) => s.amountReceived);
-  const setAmountReceived = useCartStore((s) => s.setAmountReceived);
-  const paymentMethod = useCartStore((s) => s.paymentMethod);
-  const setPaymentMethod = useCartStore((s) => s.setPaymentMethod);
-  const lines = useCartStore((s) => s.lines);
-  const coupon = useCartStore((s) => s.coupon);
-  const setCoupon = useCartStore((s) => s.setCoupon);
+  const note = useCart((s) => s.note);
+  const setNote = useCart((s) => s.setNote);
+  const isTest = useCart((s) => s.isTest);
+  const setIsTest = useCart((s) => s.setIsTest);
+  const amountReceived = useCart((s) => s.amountReceived);
+  const setAmountReceived = useCart((s) => s.setAmountReceived);
+  const paymentMethod = useCart((s) => s.paymentMethod);
+  const setPaymentMethod = useCart((s) => s.setPaymentMethod);
+  const lines = useCart((s) => s.lines);
+  const coupon = useCart((s) => s.coupon);
+  const setCoupon = useCart((s) => s.setCoupon);
   const [code, setCode] = useState('');
   const [couponError, setCouponError] = useState<string | null>(null);
 
   const subtotal = cartSubtotal(lines);
   const active = useMemo(() => listCoupons(true), [lines.length]);
 
+  const problemFor = (c: Coupon) => (c.id === lockedCouponId ? (subtotal < c.min_order ? 'minOrder' : null) : couponProblem(c, subtotal));
+
   const tryApply = (c: Coupon | null) => {
     if (!c) {
       setCouponError(t('couponNotFound'));
       return;
     }
-    const problem = couponProblem(c, subtotal);
+    const problem = problemFor(c);
     if (problem) {
       setCouponError(t(PROBLEM_KEY[problem], { amount: formatMoney(c.min_order, currency) }));
       return;
@@ -58,7 +72,7 @@ export function CheckoutForm({ total, currency, showTestToggle = true, showNote 
   const received = Number(amountReceived);
   const change = amountReceived && !Number.isNaN(received) ? received - total : null;
   const wordsLeft = NOTE_WORD_LIMIT - countWords(note);
-  const liveProblem = coupon ? couponProblem(coupon, subtotal) : null;
+  const liveProblem = coupon ? problemFor(coupon) : null;
 
   return (
     <View style={{ gap: spacing.md }}>

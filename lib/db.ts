@@ -264,6 +264,14 @@ CREATE TABLE IF NOT EXISTS orders (
   coupon_code TEXT,
   coupon_discount REAL NOT NULL DEFAULT 0,
   savings_total REAL NOT NULL DEFAULT 0,
+  original_total REAL,
+  edit_count INTEGER NOT NULL DEFAULT 0,
+  edited_at TEXT,
+  edited_by TEXT,
+  voided_at TEXT,
+  voided_by TEXT,
+  void_reason TEXT,
+  revision_id TEXT,
   is_test INTEGER NOT NULL DEFAULT 0,
   stock_deducted INTEGER NOT NULL DEFAULT 0,
   device_id TEXT,
@@ -290,6 +298,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   deal_id TEXT,
   original_unit_price REAL,
   discount_id TEXT,
+  revision_id TEXT,
   created_at TEXT,
   updated_at TEXT,
   is_dirty INTEGER NOT NULL DEFAULT 0
@@ -337,6 +346,15 @@ const COLUMN_MIGRATIONS: [string, string, string][] = [
   ['order_items', 'deal_id', 'TEXT'],
   ['order_items', 'original_unit_price', 'REAL'],
   ['order_items', 'discount_id', 'TEXT'],
+  ['orders', 'original_total', 'REAL'],
+  ['orders', 'edit_count', 'INTEGER NOT NULL DEFAULT 0'],
+  ['orders', 'edited_at', 'TEXT'],
+  ['orders', 'edited_by', 'TEXT'],
+  ['orders', 'voided_at', 'TEXT'],
+  ['orders', 'voided_by', 'TEXT'],
+  ['orders', 'void_reason', 'TEXT'],
+  ['orders', 'revision_id', 'TEXT'],
+  ['order_items', 'revision_id', 'TEXT'],
 ];
 
 let initialized = false;
@@ -406,6 +424,17 @@ export function kvGet(key: string): string | null {
 export function kvSet(key: string, value: string | null) {
   if (value === null) run('DELETE FROM kv WHERE key = ?', [key]);
   else run('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [key, value]);
+}
+
+const columnCache = new Map<string, Set<string>>();
+
+export function tableColumns(table: string): Set<string> {
+  let cols = columnCache.get(table);
+  if (!cols) {
+    cols = new Set(db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`).map((c) => c.name));
+    columnCache.set(table, cols);
+  }
+  return cols;
 }
 
 export function nowIso() {

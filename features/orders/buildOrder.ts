@@ -15,6 +15,7 @@ export interface BuildOrderOptions {
   customerOrderId?: string | null;
   coupon: Coupon | null;
   deviceId?: string | null;
+  revisionId?: string | null;
   itemId?: (index: number, componentIndex?: number) => string;
 }
 
@@ -23,6 +24,7 @@ export interface BuildOrderOptions {
 export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order: Order; items: OrderItem[] } {
   const now = new Date().toISOString();
   const totals = computeTotals(lines, opts.coupon);
+  const coupon = opts.coupon && totals.couponDiscount > 0 ? opts.coupon : null;
   const received = opts.amountReceived === '' || opts.amountReceived == null ? null : Number(opts.amountReceived);
   const idFor = opts.itemId ?? ((i, c) => (c == null ? `${opts.id}:${i}` : `${opts.id}:${i}:${c}`));
 
@@ -41,10 +43,18 @@ export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order:
     payment_method: opts.paymentMethod,
     note: opts.note.trim() || null,
     item_discount_total: totals.itemDiscount,
-    coupon_id: opts.coupon?.id ?? null,
-    coupon_code: opts.coupon?.code ?? null,
+    coupon_id: coupon?.id ?? null,
+    coupon_code: coupon?.code ?? null,
     coupon_discount: totals.couponDiscount,
     savings_total: totals.savings,
+    original_total: totals.total,
+    edit_count: 0,
+    edited_at: null,
+    edited_by: null,
+    voided_at: null,
+    voided_by: null,
+    void_reason: null,
+    revision_id: opts.revisionId ?? null,
     is_test: opts.isTest,
     stock_deducted: false,
     device_id: opts.deviceId ?? null,
@@ -71,6 +81,7 @@ export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order:
       deal_id: l.deal_id,
       original_unit_price: l.original_unit_price,
       discount_id: l.discount_id,
+      revision_id: opts.revisionId ?? null,
       created_at: now,
       updated_at: now,
     });
@@ -79,7 +90,7 @@ export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order:
         id: idFor(i, ci),
         order_id: opts.id,
         admin_id: opts.adminId,
-        menu_item_id: c.menu_item_id,
+        menu_item_id: c.menu_item_id || null,
         variant_id: c.variant_id,
         item_name: c.name,
         variant_name: c.variant_name,
@@ -90,6 +101,7 @@ export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order:
         deal_id: l.deal_id,
         original_unit_price: null,
         discount_id: null,
+        revision_id: opts.revisionId ?? null,
         created_at: now,
         updated_at: now,
       });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AppText, Badge, Button, Card, EmptyState, ListRow, Screen, Segmented, Select, StatTile, Toggle } from '@/components/ui';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { BarChart, HBarChart } from '@/components/charts/BarChart';
@@ -7,7 +8,7 @@ import { PeriodPicker, periodFileSuffix, usePeriod } from '@/features/reports/Pe
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
 import { useLocalQuery } from '@/features/app/useLocalQuery';
-import { analytics, cashierStats, hourlyStats, itemStats, listOrdersWithCounts, ordersByDay, type CashierStat, type ItemStat, type OrderWithMeta } from '@/features/orders/orderRepo';
+import { analytics, cancelledSummary, cashierStats, hourlyStats, itemStats, listOrdersWithCounts, ordersByDay, type CashierStat, type ItemStat, type OrderWithMeta } from '@/features/orders/orderRepo';
 import { listCashiers } from '@/features/auth/profileRepo';
 import { getSettings } from '@/features/settings/settingsRepo';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -22,9 +23,11 @@ type Row = OrderWithMeta & { item_count: number };
 
 export default function HistoryScreen() {
   const t = useT();
+  const router = useRouter();
   const { row } = useLayout();
   const profile = useAuthStore((s) => s.profile);
   const state = usePeriod('today');
+  const [showCancelled, setShowCancelled] = useState(false);
   const [view, setView] = useState<ViewMode>('cards');
   const [tab, setTab] = useState<Tab>('orders');
   const [cashierId, setCashierId] = useState<string>('all');
@@ -32,11 +35,12 @@ export default function HistoryScreen() {
   const [selected, setSelected] = useState<OrderWithMeta | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const [data] = useLocalQuery(() => {
+  const [data, refresh] = useLocalQuery(() => {
     const filter = { ...state.period, cashierId: cashierId === 'all' ? null : cashierId, includeTest, adminId: profile?.id ?? null };
     return {
       stats: analytics(filter),
-      orders: listOrdersWithCounts(filter),
+      cancelled: cancelledSummary(filter),
+      orders: listOrdersWithCounts({ ...filter, status: showCancelled ? 'void' : 'completed' }),
       days: ordersByDay(filter),
       cashiers: cashierStats(filter),
       hours: hourlyStats(filter),
@@ -44,7 +48,7 @@ export default function HistoryScreen() {
       cashierList: listCashiers(profile?.id ?? null),
       currency: getSettings().currency_symbol,
     };
-  }, [state.period, cashierId, includeTest, profile?.id]);
+  }, [state.period, cashierId, includeTest, showCancelled, profile?.id]);
 
   const money = (v: number) => formatMoney(v, data.currency);
   const shortMoney = (v: number) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v)));
@@ -62,10 +66,26 @@ export default function HistoryScreen() {
         name = 'cashiers';
       } else {
         csv = toCsv(
-          [t('colOrder'), t('colDate'), t('colCashier'), t('colItems'), t('subtotal'), t('colTotal'), t('amountReceived'), t('paymentMethod'), t('colSource'), t('testOrder'), t('notes')],
-          data.orders.map((o) => [o.order_number, formatDateTime(o.created_at), o.cashier_name ?? '', o.item_count, o.subtotal, o.total, o.amount_received ?? '', o.payment_method ?? '', o.source, o.is_test ? 'yes' : 'no', o.note ?? ''])
+          [t('colOrder'), t('colDate'), t('colCashier'), t('colItems'), t('subtotal'), t('colTotal'), t('originalTotal'), t('amountReceived'), t('paymentMethod'), t('colSource'), t('testOrder'), t('status'), t('colEdits'), t('cancelReason'), t('notes')],
+          data.orders.map((o) => [
+            o.order_number,
+            formatDateTime(o.created_at),
+            o.cashier_name ?? '',
+            o.item_count,
+            o.subtotal,
+            o.total,
+            o.original_total ?? o.total,
+            o.amount_received ?? '',
+            o.payment_method ?? '',
+            o.source,
+            o.is_test ? 'yes' : 'no',
+            o.status === 'void' ? 'cancelled' : 'completed',
+            o.edit_count,
+            o.void_reason ?? '',
+            o.note ?? '',
+          ])
         );
-        name = 'orders';
+        name = showCancelled ? 'cancelled-orders' : 'orders';
       }
       await shareCsv(`lagman-house-${name}-${periodFileSuffix(state.period)}.csv`, csv);
       toast.success(t('exported'));
@@ -91,6 +111,7 @@ export default function HistoryScreen() {
         <View style={[row, { gap: 4 }]}>
           <Badge label={o.source === 'qr' ? t('sourceQr') : t('sourcePos')} tone="info" />
           {o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : null}
+          {o.status === 'void' ? <Badge label={t('orderCancelledBadge')} tone="danger" /> : o.edit_count > 0 ? <Badge label={t('orderEditedBadge')} tone="warning" /> : null}
         </View>
       ),
       sortValue: (o) => `${o.source}${o.is_test ? '-test' : ''}`,
@@ -124,12 +145,14 @@ export default function HistoryScreen() {
         <View style={{ height: spacing.sm }} />
         <Select label={t('filterCashier')} value={cashierId} onChange={setCashierId} options={[{ value: 'all', label: t('allCashiers') }, ...data.cashierList.map((c) => ({ value: c.id, label: c.name }))]} />
         <Toggle label={t('includeTest')} value={includeTest} onChange={setIncludeTest} />
+        <Toggle label={t('showCancelled')} hint={t('showCancelledHint')} value={showCancelled} onChange={setShowCancelled} />
       </Card>
 
       <View style={[row, { gap: spacing.md, flexWrap: 'wrap' }]}>
         <StatTile label={t('revenue')} value={money(data.stats.revenue)} tone="action" />
         <StatTile label={t('orders')} value={String(data.stats.count)} tone="dark" />
         <StatTile label={t('avgOrder')} value={money(data.stats.average)} tone="highlight" />
+        <StatTile label={t('orderCancelledBadge')} value={String(data.cancelled.count)} sub={money(data.cancelled.value)} tone="muted" />
       </View>
 
       <View style={[row, { gap: spacing.lg, flexWrap: 'wrap', alignItems: 'flex-start' }]}>
@@ -179,6 +202,7 @@ export default function HistoryScreen() {
                     style={i === data.orders.length - 1 ? { borderBottomWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 } : null}
                     right={
                       <View style={[row, { gap: 4 }]}>
+                        {o.status === 'void' ? <Badge label={t('orderCancelledBadge')} tone="danger" /> : o.edit_count > 0 ? <Badge label={t('orderEditedBadge')} tone="warning" /> : null}
                         {o.is_test ? <Badge label={t('testOrder')} tone="warning" /> : null}
                         {o.source === 'qr' ? <Badge label={t('sourceQr')} tone="info" /> : null}
                         {o.is_dirty ? <Badge label={t('unsynced')} /> : null}
@@ -196,7 +220,15 @@ export default function HistoryScreen() {
           {`${data.orders.length} ${t('orders').toLowerCase()}`}
         </AppText>
       ) : null}
-      <OrderDetailSheet order={selected} onClose={() => setSelected(null)} />
+      <OrderDetailSheet
+        order={selected}
+        onClose={() => setSelected(null)}
+        onChanged={refresh}
+        onEdit={(o) => {
+          setSelected(null);
+          router.push(`/(admin)/orders/${o.id}` as never);
+        }}
+      />
     </Screen>
   );
 }

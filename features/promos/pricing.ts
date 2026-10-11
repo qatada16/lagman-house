@@ -60,7 +60,7 @@ export interface Totals {
 export function computeTotals(lines: CartLine[], coupon: Coupon | null): Totals {
   const subtotal = cartSubtotal(lines);
   const itemDiscount = cartItemSavings(lines);
-  const cd = coupon ? couponDiscount(coupon, subtotal) : 0;
+  const cd = coupon && subtotal >= coupon.min_order ? couponDiscount(coupon, subtotal) : 0;
   const total = round2(Math.max(0, subtotal - cd));
   return { subtotal, itemDiscount, couponDiscount: cd, total, savings: round2(itemDiscount + cd) };
 }

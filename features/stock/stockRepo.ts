@@ -55,18 +55,27 @@ export function stockUsageCount(stockId: string) {
   return get<{ c: number }>('SELECT COUNT(DISTINCT menu_item_id) AS c FROM stock_links WHERE stock_item_id = ? AND deleted_at IS NULL', [stockId])?.c ?? 0;
 }
 
-export function deductStockLocally(orderId: string) {
+function moveStockLocally(orderId: string, direction: 1 | -1) {
   const rows = all<{ stock_item_id: string; qty: number }>(
     `SELECT sl.stock_item_id, SUM(sl.quantity_per_unit * oi.quantity) AS qty
      FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
      JOIN stock_links sl ON sl.menu_item_id = oi.menu_item_id
        AND sl.deleted_at IS NULL
        AND (sl.variant_id IS NULL OR sl.variant_id = oi.variant_id)
-     WHERE oi.order_id = ?
+     WHERE oi.order_id = ? AND oi.revision_id IS o.revision_id
      GROUP BY sl.stock_item_id`,
     [orderId]
   );
-  for (const r of rows) run('UPDATE stock_items SET quantity = quantity - ? WHERE id = ?', [r.qty, r.stock_item_id]);
+  for (const r of rows) run('UPDATE stock_items SET quantity = quantity + ? WHERE id = ?', [direction * r.qty, r.stock_item_id]);
+}
+
+export function deductStockLocally(orderId: string) {
+  moveStockLocally(orderId, -1);
+}
+
+export function restoreStockLocally(orderId: string) {
+  moveStockLocally(orderId, 1);
 }
 
 export interface PurchaseInput {

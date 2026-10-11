@@ -226,6 +226,6 @@ export function deleteCoupon(id: string) {
   requestSync();
 }
 
-export function bumpCouponUseLocally(id: string) {
-  run('UPDATE coupons SET uses_count = uses_count + 1 WHERE id = ?', [id]);
+export function bumpCouponUseLocally(id: string, delta = 1) {
+  run('UPDATE coupons SET uses_count = MAX(0, uses_count + ?) WHERE id = ?', [delta, id]);
 }

@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Button, EmptyState, IconButton, Stepper } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, radius, spacing } from '@/constants/theme';
-import { useCartStore } from '@/store/cartStore';
+import { useCart } from '@/store/cartStore';
 import { computeTotals } from '@/features/promos/pricing';
 import { formatMoney } from '@/lib/format';
 import { getSettings } from '@/features/settings/settingsRepo';
@@ -12,9 +12,9 @@ import { confirm } from '@/lib/confirm';
 export function CartLines({ editable = true }: { editable?: boolean }) {
   const t = useT();
   const { row } = useLayout();
-  const lines = useCartStore((s) => s.lines);
-  const setQuantity = useCartStore((s) => s.setQuantity);
-  const remove = useCartStore((s) => s.remove);
+  const lines = useCart((s) => s.lines);
+  const setQuantity = useCart((s) => s.setQuantity);
+  const remove = useCart((s) => s.remove);
   const currency = getSettings().currency_symbol;
   if (lines.length === 0) return <EmptyState title={t('cartEmpty')} icon="shopping-cart" />;
   return (
@@ -30,7 +30,7 @@ export function CartLines({ editable = true }: { editable?: boolean }) {
               </AppText>
               {l.components.map((c) => (
                 <AppText key={c.slot_id} variant="small" color={colors.textSecondary}>
-                  {`${c.slot_name}: ${c.name}${c.variant_name ? ` (${c.variant_name})` : ''}`}
+                  {`${c.slot_name ? `${c.slot_name}: ` : ''}${c.name}${c.variant_name ? ` (${c.variant_name})` : ''}`}
                 </AppText>
               ))}
               <View style={[row, { gap: spacing.xs, alignItems: 'center' }]}>
@@ -57,12 +57,24 @@ export function CartLines({ editable = true }: { editable?: boolean }) {
   );
 }
 
-export function CartPanel({ onProceed, compact }: { onProceed: () => void; compact?: boolean }) {
+export function CartPanel({
+  onProceed,
+  compact,
+  title,
+  proceedLabel,
+  clearable = true,
+}: {
+  onProceed: () => void;
+  compact?: boolean;
+  title?: string;
+  proceedLabel?: string;
+  clearable?: boolean;
+}) {
   const t = useT();
   const { row } = useLayout();
-  const lines = useCartStore((s) => s.lines);
-  const coupon = useCartStore((s) => s.coupon);
-  const clear = useCartStore((s) => s.clear);
+  const lines = useCart((s) => s.lines);
+  const coupon = useCart((s) => s.coupon);
+  const clear = useCart((s) => s.clear);
   const currency = getSettings().currency_symbol;
   const totals = computeTotals(lines, coupon);
   const count = lines.reduce((s, l) => s + l.quantity, 0);
@@ -74,8 +86,8 @@ export function CartPanel({ onProceed, compact }: { onProceed: () => void; compa
   return (
     <View style={[styles.panel, compact ? styles.compact : null]}>
       <View style={[styles.header, row]}>
-        <AppText variant="heading">{`${t('cart')} (${count})`}</AppText>
-        {lines.length ? <Button title={t('clearCart')} variant="ghost" size="sm" onPress={clearAll} /> : null}
+        <AppText variant="heading" style={{ flexShrink: 1 }} numberOfLines={1}>{`${title ?? t('cart')} (${count})`}</AppText>
+        {clearable && lines.length ? <Button title={t('clearCart')} variant="ghost" size="sm" onPress={clearAll} /> : null}
       </View>
       <ScrollView style={{ flexShrink: 1, maxHeight: compact ? 220 : undefined }} contentContainerStyle={{ paddingHorizontal: spacing.md }}>
         <CartLines />
@@ -90,7 +102,7 @@ export function CartPanel({ onProceed, compact }: { onProceed: () => void; compa
             ) : null}
           </View>
         </View>
-        <Button title={t('proceed')} variant="action" size="lg" disabled={lines.length === 0} onPress={onProceed} icon="arrow-right" />
+        <Button title={proceedLabel ?? t('proceed')} variant="action" size="lg" disabled={lines.length === 0} onPress={onProceed} icon="arrow-right" />
       </View>
     </View>
   );

@@ -51,3 +51,5 @@ IMAGES/
 
 # Ignore VS Code local workspace settings
 .vscode/*
+# supabase cli
+supabase/.temp/

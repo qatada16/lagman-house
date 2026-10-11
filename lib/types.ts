@@ -167,6 +167,14 @@ export interface Order {
   coupon_code: string | null;
   coupon_discount: number;
   savings_total: number;
+  original_total: number | null;
+  edit_count: number;
+  edited_at: string | null;
+  edited_by: string | null;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
+  revision_id: string | null;
   is_test: boolean;
   stock_deducted: boolean;
   device_id: string | null;
@@ -190,6 +198,7 @@ export interface OrderItem {
   deal_id: string | null;
   original_unit_price: number | null;
   discount_id: string | null;
+  revision_id: string | null;
   created_at: string;
   updated_at: string;
 }

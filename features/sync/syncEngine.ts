@@ -1,6 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { supabase } from '@/lib/supabase';
-import { all, get, kvGet, kvSet, nowIso, run, upsert } from '@/lib/db';
+import { all, get, kvGet, kvSet, nowIso, run, tableColumns, upsert } from '@/lib/db';
 import { useSyncStore } from '@/store/syncStore';
 import { SYNC_TABLES, fromServer, toServer, type SyncTable } from './tables';
 import { hasPendingUpload, processPendingUploads } from './uploads';
@@ -21,6 +21,12 @@ type Row = Record<string, unknown>;
 
 function assertLive() {
   if (aborted) throw new Error('aborted');
+}
+
+function keepKnownColumns(row: Row, columns: Set<string>): Row {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(row)) if (columns.has(k)) out[k] = v;
+  return out;
 }
 
 export interface SyncResult {
@@ -66,7 +72,7 @@ async function pullTable(t: SyncTable): Promise<number> {
       const id = row.id as string;
       const local = get<{ is_dirty: number }>(`SELECT is_dirty FROM ${t.name} WHERE id = ?`, [id]);
       if (local?.is_dirty) continue; // local edit wins until it is pushed
-      const incoming = fromServer(t, row);
+      const incoming = keepKnownColumns(fromServer(t, row), tableColumns(t.name));
       if (t.name === 'menu_items' && hasPendingUpload('menu_items', id, 'image_url')) delete incoming.image_url;
       upsert(t.name, incoming);
       pulled++;
@@ -95,6 +101,10 @@ async function pushRows(t: SyncTable, rows: Row[]) {
   }
   for (const r of rows) {
     run(`UPDATE ${t.name} SET is_dirty = 0 WHERE id = ? AND updated_at = ?`, [r.id as string, r.updated_at as string]);
+  }
+  if (t.name === 'order_items') {
+    const orderIds = [...new Set(rows.map((r) => r.order_id as string))];
+    for (const id of orderIds) run('UPDATE orders SET stock_deducted = 0 WHERE id = ? AND is_test = 0', [id]);
   }
 }
 
@@ -127,16 +137,22 @@ async function pushTable(t: SyncTable): Promise<number> {
 
 // Server-side deduction is authoritative and idempotent per order id.
 async function reconcileStock(): Promise<boolean> {
-  const orders = all<{ id: string }>(
-    'SELECT id FROM orders WHERE is_dirty = 0 AND is_test = 0 AND stock_deducted = 0 AND status = ?',
-    ['completed']
+  const orders = all<{ id: string; updated_at: string; revision_id: string | null; status: string }>(
+    `SELECT o.id, o.updated_at, o.revision_id, o.status FROM orders o
+     WHERE o.is_dirty = 0 AND o.is_test = 0 AND o.stock_deducted = 0
+       AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.is_dirty = 1)`
   );
   let touched = false;
   for (const o of orders) {
     const { error } = await supabase.rpc('deduct_stock_for_order', { p_order_id: o.id });
     assertLive();
     if (error) throw new Error(`deduct_stock_for_order: ${error.message}`);
-    run('UPDATE orders SET stock_deducted = 1 WHERE id = ?', [o.id]);
+    run(
+      `UPDATE orders SET stock_deducted = 1
+       WHERE id = ? AND is_dirty = 0 AND updated_at = ? AND revision_id IS ? AND status = ?
+         AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.is_dirty = 1)`,
+      [o.id, o.updated_at, o.revision_id, o.status]
+    );
     touched = true;
   }
   return touched;

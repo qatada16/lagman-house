@@ -1,6 +1,6 @@
 import { all, get, transaction, upsert } from '@/lib/db';
 import { getDeviceCode, getDeviceId, newId, nextOrderSequence } from '@/lib/device';
-import type { CartLine, Coupon, Order, OrderItem, PaymentMethod } from '@/lib/types';
+import type { CartLine, Coupon, Order, OrderItem, PaymentMethod, Profile } from '@/lib/types';
 import { buildOrder } from './buildOrder';
 import { bumpCouponUseLocally } from '@/features/promos/promoRepo';
 import { deductStockLocally } from '@/features/stock/stockRepo';
@@ -11,15 +11,24 @@ type OrderRow = Omit<Order, 'is_test' | 'stock_deducted'> & { is_test: number; s
 export interface OrderWithMeta extends Order {
   is_dirty: boolean;
   cashier_name?: string | null;
+  edited_by_name?: string | null;
+  voided_by_name?: string | null;
 }
 
 const toOrder = (r: OrderRow & { cashier_name?: string | null }): OrderWithMeta => ({
   ...r,
   admin_id: r.admin_id ?? null,
+  edit_count: r.edit_count ?? 0,
   is_test: !!r.is_test,
   stock_deducted: !!r.stock_deducted,
   is_dirty: !!r.is_dirty,
 });
+
+const ORDER_SELECT = `SELECT o.*, p.name AS cashier_name, ep.name AS edited_by_name, vp.name AS voided_by_name
+  FROM orders o
+  LEFT JOIN profiles p ON p.id = o.cashier_id
+  LEFT JOIN profiles ep ON ep.id = o.edited_by
+  LEFT JOIN profiles vp ON vp.id = o.voided_by`;
 
 export interface CreateOrderInput {
   id?: string;
@@ -70,15 +79,34 @@ export function createOrder(input: CreateOrderInput): { order: Order; items: Ord
 }
 
 export function getOrder(id: string): OrderWithMeta | null {
-  const r = get<OrderRow & { cashier_name: string | null }>(
-    'SELECT o.*, p.name AS cashier_name FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id WHERE o.id = ?',
-    [id]
-  );
+  const r = get<OrderRow & { cashier_name: string | null }>(`${ORDER_SELECT} WHERE o.id = ?`, [id]);
   return r ? toOrder(r) : null;
 }
 
+export function listRecentOrders(profile: Profile | null, since: Date): (OrderWithMeta & { item_count: number })[] {
+  if (!profile) return [];
+  const tenant = profile.role === 'admin' ? profile.id : profile.admin_id;
+  const clauses = ['o.created_at >= ?', 'o.admin_id = ?'];
+  const params: string[] = [since.toISOString(), tenant ?? ''];
+  if (profile.role !== 'admin') {
+    clauses.push('o.cashier_id = ?');
+    params.push(profile.id);
+  }
+  return all<OrderRow & { cashier_name: string | null; item_count: number }>(
+    `SELECT q.*, (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = q.id AND oi.parent_item_id IS NULL AND oi.revision_id IS q.revision_id) AS item_count
+     FROM (${ORDER_SELECT} WHERE ${clauses.join(' AND ')}) q
+     ORDER BY q.created_at DESC LIMIT 500`,
+    params
+  ).map((r) => ({ ...toOrder(r), item_count: r.item_count }));
+}
+
 export function getOrderItems(orderId: string): OrderItem[] {
-  return all<OrderItem>('SELECT * FROM order_items WHERE order_id = ? ORDER BY COALESCE(parent_item_id, id), parent_item_id IS NOT NULL, created_at', [orderId]);
+  return all<OrderItem>(
+    `SELECT oi.* FROM order_items oi JOIN orders o ON o.id = oi.order_id
+     WHERE oi.order_id = ? AND oi.revision_id IS o.revision_id
+     ORDER BY COALESCE((SELECT p.rowid FROM order_items p WHERE p.id = oi.parent_item_id), oi.rowid), oi.parent_item_id IS NOT NULL, oi.rowid`,
+    [orderId]
+  );
 }
 
 export interface OrderFilter {
@@ -87,11 +115,12 @@ export interface OrderFilter {
   from: Date;
   to: Date;
   includeTest?: boolean;
+  status?: 'completed' | 'void';
 }
 
 function whereFor(f: OrderFilter) {
-  const clauses = ['o.created_at >= ?', 'o.created_at < ?', "o.status = 'completed'"];
-  const params: (string | number)[] = [f.from.toISOString(), f.to.toISOString()];
+  const clauses = ['o.created_at >= ?', 'o.created_at < ?', 'o.status = ?'];
+  const params: (string | number)[] = [f.from.toISOString(), f.to.toISOString(), f.status ?? 'completed'];
   if (f.cashierId) {
     clauses.push('o.cashier_id = ?');
     params.push(f.cashierId);
@@ -114,12 +143,16 @@ export function listOrders(f: OrderFilter, limit = 200): OrderWithMeta[] {
 export function listOrdersWithCounts(f: OrderFilter, limit = 1000): (OrderWithMeta & { item_count: number })[] {
   const { where, params } = whereFor(f);
   return all<OrderRow & { cashier_name: string | null; item_count: number }>(
-    `SELECT o.*, p.name AS cashier_name,
-            (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id AND oi.parent_item_id IS NULL) AS item_count
-     FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
-     WHERE ${where} ORDER BY o.created_at DESC LIMIT ?`,
+    `SELECT q.*, (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = q.id AND oi.parent_item_id IS NULL AND oi.revision_id IS q.revision_id) AS item_count
+     FROM (${ORDER_SELECT} WHERE ${where}) q ORDER BY q.created_at DESC LIMIT ?`,
     [...params, limit]
   ).map((r) => ({ ...toOrder(r), item_count: r.item_count }));
+}
+
+export function cancelledSummary(f: OrderFilter): { count: number; value: number } {
+  const { where, params } = whereFor({ ...f, status: 'void' });
+  const r = get<{ count: number; value: number | null }>(`SELECT COUNT(*) AS count, SUM(o.total) AS value FROM orders o WHERE ${where}`, params);
+  return { count: r?.count ?? 0, value: r?.value ?? 0 };
 }
 
 export interface Analytics {
@@ -136,7 +169,7 @@ export function analytics(f: OrderFilter): Analytics {
     `SELECT CASE WHEN oi.variant_name IS NULL THEN oi.item_name ELSE oi.item_name || ' (' || oi.variant_name || ')' END AS name,
             SUM(oi.quantity) AS quantity, SUM(oi.line_total) AS revenue
      FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     WHERE ${where} AND (oi.parent_item_id IS NULL OR oi.deal_id IS NOT NULL) AND NOT (oi.parent_item_id IS NULL AND oi.deal_id IS NOT NULL)
+     WHERE ${where} AND oi.revision_id IS o.revision_id AND (oi.parent_item_id IS NULL OR oi.deal_id IS NOT NULL) AND NOT (oi.parent_item_id IS NULL AND oi.deal_id IS NOT NULL)
      GROUP BY name ORDER BY quantity DESC LIMIT 10`,
     params
   );
@@ -208,7 +241,7 @@ export function itemStats(f: OrderFilter): ItemStat[] {
     `SELECT CASE WHEN oi.variant_name IS NULL THEN oi.item_name ELSE oi.item_name || ' (' || oi.variant_name || ')' END AS name,
             SUM(oi.quantity) AS quantity, SUM(oi.line_total) AS revenue, COUNT(DISTINCT oi.order_id) AS orders
      FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     WHERE ${where} AND NOT (oi.parent_item_id IS NULL AND oi.deal_id IS NOT NULL)
+     WHERE ${where} AND oi.revision_id IS o.revision_id AND NOT (oi.parent_item_id IS NULL AND oi.deal_id IS NOT NULL)
      GROUP BY name ORDER BY quantity DESC`,
     params
   );

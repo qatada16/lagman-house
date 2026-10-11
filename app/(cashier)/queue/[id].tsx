@@ -12,7 +12,7 @@ import { getSettings } from '@/features/settings/settingsRepo';
 import { cancelCustomerOrder, completeCustomerOrder, releaseCustomerOrder } from '@/features/qr/customerOrdersApi';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
-import { clampNote, dealLine, itemLine, useCartStore } from '@/store/cartStore';
+import { CartStoreContext, clampNote, createCartStore, dealLine, itemLine } from '@/store/cartStore';
 import { computeTotals } from '@/features/promos/pricing';
 import { getDeal, listDealSlots } from '@/features/promos/promoRepo';
 import { TotalsSummary } from '@/features/orders/TotalsSummary';
@@ -30,7 +30,8 @@ export default function ClaimedOrderScreen() {
   const profile = useAuthStore((s) => s.profile);
   const customerOrder = useCustomerOrderStore((s) => s.orders.find((o) => o.id === id));
   const removeFromQueue = useCustomerOrderStore((s) => s.remove);
-  const cart = useCartStore();
+  const [store] = useState(createCartStore);
+  const cart = store();
   const draft = useDraftOrder();
   const currency = getSettings().currency_symbol;
   const [busy, setBusy] = useState(false);
@@ -86,7 +87,6 @@ export default function ClaimedOrderScreen() {
     cart.setNote(clampNote(customerOrder.note ?? ''));
     cart.setIsTest(false);
     setUnavailable(missing);
-    return () => cart.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerOrder?.id]);
 
@@ -179,46 +179,48 @@ export default function ClaimedOrderScreen() {
   };
 
   return (
-    <Screen
-      title={t('confirmCustomerOrder')}
-      subtitle={`${customerOrder.table_code ? t('tableShort', { code: customerOrder.table_code }) : ''}  #${draft.orderNumber}`}
-      actions={<IconButton icon="x" onPress={() => router.back()} />}
-      footer={
-        <View style={[row, { gap: spacing.sm }]}>
-          <Button title={t('releaseOrder')} variant="outline" onPress={release} disabled={busy} />
-          <Button title={t('cancel')} variant="ghost" onPress={cancel} disabled={busy} />
-          <Button title={t('completeOrder')} variant="action" icon="check" loading={busy} disabled={cart.lines.length === 0} onPress={complete} style={{ flex: 1 }} />
-        </View>
-      }
-    >
-      <Card padded={false}>
-        <View style={{ padding: spacing.md, paddingBottom: 0 }}>
-          <Badge label={t('claimedByYou')} tone="success" />
-          <AppText variant="small" style={{ marginTop: spacing.xs }}>
-            {t('priceUpdatedHint')}
-          </AppText>
-        </View>
-        <View style={{ paddingHorizontal: spacing.md }}>
-          <CartLines />
-        </View>
-        {unavailable.length > 0 ? (
-          <View style={{ padding: spacing.md }}>
-            {unavailable.map((n) => (
-              <AppText key={n} variant="small" color={colors.danger}>{`${n}: ${t('itemUnavailable')}`}</AppText>
-            ))}
+    <CartStoreContext.Provider value={store}>
+      <Screen
+        title={t('confirmCustomerOrder')}
+        subtitle={`${customerOrder.table_code ? t('tableShort', { code: customerOrder.table_code }) : ''}  #${draft.orderNumber}`}
+        actions={<IconButton icon="x" onPress={() => router.back()} />}
+        footer={
+          <View style={[row, { gap: spacing.sm }]}>
+            <Button title={t('releaseOrder')} variant="outline" onPress={release} disabled={busy} />
+            <Button title={t('cancel')} variant="ghost" onPress={cancel} disabled={busy} />
+            <Button title={t('completeOrder')} variant="action" icon="check" loading={busy} disabled={cart.lines.length === 0} onPress={complete} style={{ flex: 1 }} />
           </View>
-        ) : null}
-        <Divider style={{ marginVertical: 0 }} />
-        <View style={{ padding: spacing.md }}>
-          <TotalsSummary totals={totals} currency={currency} />
-        </View>
-      </Card>
-      <Card>
-        <CheckoutForm total={total} currency={currency} showTestToggle={false} />
-      </Card>
-      <Card title={t('printReceipt')}>
-        <PrintButtons order={preview.order} items={preview.items} cashierName={profile?.name} />
-      </Card>
-    </Screen>
+        }
+      >
+        <Card padded={false}>
+          <View style={{ padding: spacing.md, paddingBottom: 0 }}>
+            <Badge label={t('claimedByYou')} tone="success" />
+            <AppText variant="small" style={{ marginTop: spacing.xs }}>
+              {t('priceUpdatedHint')}
+            </AppText>
+          </View>
+          <View style={{ paddingHorizontal: spacing.md }}>
+            <CartLines />
+          </View>
+          {unavailable.length > 0 ? (
+            <View style={{ padding: spacing.md }}>
+              {unavailable.map((n) => (
+                <AppText key={n} variant="small" color={colors.danger}>{`${n}: ${t('itemUnavailable')}`}</AppText>
+              ))}
+            </View>
+          ) : null}
+          <Divider style={{ marginVertical: 0 }} />
+          <View style={{ padding: spacing.md }}>
+            <TotalsSummary totals={totals} currency={currency} />
+          </View>
+        </Card>
+        <Card>
+          <CheckoutForm total={total} currency={currency} showTestToggle={false} />
+        </Card>
+        <Card title={t('printReceipt')}>
+          <PrintButtons order={preview.order} items={preview.items} cashierName={profile?.name} />
+        </Card>
+      </Screen>
+    </CartStoreContext.Provider>
   );
 }

@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { create } from 'zustand';
 import type { CartComponent, CartLine, Coupon, Deal, MenuItem, MenuItemVariant, PaymentMethod } from '@/lib/types';
 import { listDiscounts } from '@/features/promos/promoRepo';
@@ -61,7 +62,7 @@ export function dealLine(deal: Deal, components: CartComponent[]): CartLine {
   };
 }
 
-interface CartState {
+export interface CartState {
   lines: CartLine[];
   note: string;
   isTest: boolean;
@@ -87,30 +88,42 @@ function merge(lines: CartLine[], line: CartLine) {
   return [...lines, line];
 }
 
-export const useCartStore = create<CartState>((set) => ({
-  lines: [],
-  note: '',
-  isTest: false,
-  amountReceived: '',
-  paymentMethod: 'cash',
-  coupon: null,
+export function createCartStore() {
+  return create<CartState>((set) => ({
+    lines: [],
+    note: '',
+    isTest: false,
+    amountReceived: '',
+    paymentMethod: 'cash',
+    coupon: null,
 
-  add: (item, variant) => set((s) => ({ lines: merge(s.lines, itemLine(item, variant)) })),
-  addLine: (line) => set((s) => ({ lines: merge(s.lines, line) })),
+    add: (item, variant) => set((s) => ({ lines: merge(s.lines, itemLine(item, variant)) })),
+    addLine: (line) => set((s) => ({ lines: merge(s.lines, line) })),
 
-  setQuantity: (key, qty) =>
-    set((s) => ({ lines: qty <= 0 ? s.lines.filter((l) => l.key !== key) : s.lines.map((l) => (l.key === key ? { ...l, quantity: qty } : l)) })),
+    setQuantity: (key, qty) =>
+      set((s) => ({ lines: qty <= 0 ? s.lines.filter((l) => l.key !== key) : s.lines.map((l) => (l.key === key ? { ...l, quantity: qty } : l)) })),
 
-  remove: (key) => set((s) => ({ lines: s.lines.filter((l) => l.key !== key) })),
+    remove: (key) => set((s) => ({ lines: s.lines.filter((l) => l.key !== key) })),
 
-  clear: () => set({ lines: [], note: '', isTest: false, amountReceived: '', paymentMethod: 'cash', coupon: null }),
+    clear: () => set({ lines: [], note: '', isTest: false, amountReceived: '', paymentMethod: 'cash', coupon: null }),
 
-  setNote: (note) => set({ note: clampNote(note) }),
-  setIsTest: (isTest) => set({ isTest }),
-  setAmountReceived: (amountReceived) => set({ amountReceived }),
-  setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
-  setCoupon: (coupon) => set({ coupon }),
-  replaceLines: (lines) => set({ lines }),
-}));
+    setNote: (note) => set({ note: clampNote(note) }),
+    setIsTest: (isTest) => set({ isTest }),
+    setAmountReceived: (amountReceived) => set({ amountReceived }),
+    setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+    setCoupon: (coupon) => set({ coupon }),
+    replaceLines: (lines) => set({ lines }),
+  }));
+}
+
+export type CartStore = ReturnType<typeof createCartStore>;
+
+export const useCartStore = createCartStore();
+
+export const CartStoreContext = createContext<CartStore>(useCartStore);
+
+export function useCart<T>(selector: (s: CartState) => T): T {
+  return useContext(CartStoreContext)(selector);
+}
 
 export { cartSubtotal } from '@/features/promos/pricing';

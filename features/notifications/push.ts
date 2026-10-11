@@ -46,7 +46,7 @@ export async function registerForPush(userId: string, currentToken: string | nul
   }
 }
 
-export type PushData = { type?: 'cashier_request' | 'status_change' | 'customer_order'; id?: string; user_id?: string; status?: string };
+export type PushData = { type?: 'cashier_request' | 'status_change' | 'customer_order' | 'order_change'; id?: string; user_id?: string; status?: string };
 
 export function addNotificationListeners(handlers: {
   onReceived?: (data: PushData, title: string | null, body: string | null) => void;

@@ -194,6 +194,8 @@ export function layoutReceipt(order: Order, items: OrderItem[], template: Receip
   if (c.cashier.show && ctx.cashierName) text(`Cashier: ${ctx.cashierName}`);
   if (c.table.show && order.table_code) text(`Table: ${order.table_code}`);
   if (order.is_test && c.testWatermark) text('*** TEST ORDER ***', { align: 'center', bold: true });
+  if (order.status === 'void') text('*** CANCELLED ***', { align: 'center', bold: true });
+  else if ((order.edit_count ?? 0) > 0) text('REVISED RECEIPT', { align: 'center', bold: true });
   rule();
 
   const parents = items.filter((it) => !it.parent_item_id);
@@ -338,6 +340,14 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
     coupon_code: 'WELCOME10',
     coupon_discount: 150,
     savings_total: 150,
+    original_total: price * 2 + 1300,
+    edit_count: 0,
+    edited_at: null,
+    edited_by: null,
+    voided_at: null,
+    voided_by: null,
+    void_reason: null,
+    revision_id: null,
     is_test: true,
     stock_deducted: false,
     device_id: null,
@@ -361,6 +371,7 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
       deal_id: null,
       original_unit_price: price,
       discount_id: null,
+      revision_id: null,
       created_at: now,
       updated_at: now,
     },
@@ -379,6 +390,7 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
       deal_id: null,
       original_unit_price: 1450,
       discount_id: null,
+      revision_id: null,
       created_at: now,
       updated_at: now,
     },

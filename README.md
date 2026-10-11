@@ -31,7 +31,9 @@ web/                 static public menu page (QR ordering)
 1. Copy `.env.example` to `.env` and fill in the Supabase URL, publishable key and hosted menu URL.
    The same three values live in each `eas.json` build profile's `env` block, which is what cloud builds use.
 2. Run `supabase/schema.sql` in the Supabase SQL Editor, then every file in `supabase/migrations/` in numeric order
-   (004 adds promotions, 005 locks down app releases for the update prompt). Both are safe to re-run.
+   (004 adds promotions, 005 locks down app releases for the update prompt, 006 adds order editing and cancelling).
+   Both are safe to re-run. A migration that adds columns to synced tables must go live together with the app build
+   that uses them; see "Rolling out a migration" below.
 3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
    Email verification and password reset use Supabase's default email links, which deep-link back into the app.
 4. `npm install`. A `postinstall` step runs `patch-package`, which applies the fixes in `patches/` to the
@@ -70,6 +72,40 @@ web/                 static public menu page (QR ordering)
   window. Cashiers see the active codes on the checkout screen and can also type one. Usage is counted by a
   database trigger, so a cap cannot be exceeded by two cashiers at once.
 - Receipt templates have "Show total saved" and "Show coupon line" toggles.
+
+## Editing and cancelling orders
+
+- Cashiers: Orders tab. Admins: drawer -> Recent orders, or tap an order in History. The list shows the last 24 hours;
+  cashiers see their own orders, admins see every order of their restaurant.
+- Tap an order -> **Edit order** opens the menu with the order's items: change quantities, remove lines or add items
+  (new items use today's price and discounts, existing lines keep the price they were sold at). Review changes shows
+  the previous and new total and how much to collect or refund, then Save changes. Print the revised receipt from there;
+  it is marked REVISED RECEIPT.
+- **Cancel order** needs a reason. The order stays in the records as Cancelled with who cancelled it, when and why;
+  a reprint is marked CANCELLED.
+- What updates automatically: revenue, charts, item and cashier tables (only completed orders count), stock (an edit
+  returns or takes exactly the difference, a cancel returns everything), coupon uses (released on cancel or when the
+  coupon is removed or no longer reaches its minimum). Test orders never touch stock or coupons.
+- Audit: the server records the original total, edit count, who edited or cancelled and when; clients cannot forge
+  these. When a cashier edits or cancels an order the admin gets a push notification. History shows a Cancelled tile
+  (count and value) and a "Show cancelled orders" switch, and the CSV export includes status, original total, edits
+  and cancel reason.
+- Orders older than 24 hours are locked in the app. Cancelled orders cannot be reopened.
+- Works offline like everything else: the change is saved locally and synced later. If two devices edit the same order
+  before syncing, the last one to sync wins as a whole; items are never mixed.
+- The editor uses its own cart, separate from the POS cart, so a sale in progress is never touched. Claiming a QR
+  order works the same way.
+
+### Rolling out a migration
+
+1. `npm run build:prod -- --message "[mandatory] What changed"` and wait until the build finishes (the webhook
+   publishes it, so every device shows a non-dismissable update dialog on its next launch).
+2. Run the new migration in the SQL Editor.
+3. Open the app on each device and install the update.
+
+Between steps 2 and 3, devices on the old build cannot sync (they keep their sales locally and upload them after
+updating), so do step 3 straight away. From 1.0.2 builds made after migration 006, the app ignores server columns it
+does not know yet, so adding columns no longer stops older builds from downloading.
 
 ## Forgot password
 
@@ -198,7 +234,11 @@ invalidates old QR prints. Customers type their table number as a hint.
 - Every write goes to SQLite first and is flagged `is_dirty`; the sync engine pushes in the background and
   pulls server changes newer than the last synced `updated_at` per table.
 - Stock is deducted locally on order completion and authoritatively on the server through
-  `deduct_stock_for_order(order_id)`, which is idempotent. Orders flagged `is_test` never touch stock.
+  `deduct_stock_for_order(order_id)`. It reconciles the order's current items against what was already taken for it
+  (table `order_stock_applied`), so creating, editing and cancelling all converge and repeated calls change nothing.
+  Every stock change is logged in `stock_movements` (`order` / `order_return`). Orders flagged `is_test` never touch stock.
+- An edit gives the order a new `revision_id` and a fresh set of items with that revision; the order's items are the
+  ones matching its revision. Older item rows stay for the record and are ignored everywhere.
 - Customer orders are claimed with `claim_customer_order(order_id, cashier_id)`, a single atomic UPDATE.
 - Receipts are laid out by `features/receipts/render.ts` into exact fixed-width lines, sent to the printer
   as raw ESC/POS bytes with no margin, and shown line for line in the template preview. Columns size

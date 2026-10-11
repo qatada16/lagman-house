@@ -73,6 +73,7 @@ export function useAppServices() {
         if (data.type === 'customer_order') void useCustomerOrderStore.getState().refresh();
         if (data.type === 'cashier_request') void runSync('push');
         if (data.type === 'status_change') void useAuthStore.getState().refreshProfile();
+        if (data.type === 'order_change') void runSync('push');
         toast.info(title && body ? `${title}: ${body}` : title ?? body ?? translate(lang, 'success'));
       },
       onResponse: (data) => {
@@ -80,6 +81,7 @@ export function useAppServices() {
         if (!p) return;
         if (data.type === 'cashier_request' && p.role === 'admin') router.push('/(admin)/cashiers');
         if (data.type === 'customer_order' && p.role === 'cashier') router.push('/(cashier)/queue');
+        if (data.type === 'order_change' && p.role === 'admin') router.push('/(admin)/orders');
       },
     });
   }, [router]);

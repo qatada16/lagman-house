@@ -8,7 +8,7 @@ import { PeriodPicker, periodFileSuffix, usePeriod } from '@/features/reports/Pe
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
 import { useLocalQuery } from '@/features/app/useLocalQuery';
-import { analytics, cancelledSummary, cashierStats, hourlyStats, itemStats, listOrdersWithCounts, ordersByDay, type CashierStat, type ItemStat, type OrderWithMeta } from '@/features/orders/orderRepo';
+import { analytics, cancelledSummary, cashierStats, listOrderStaff, hourlyStats, itemStats, listOrdersWithCounts, ordersByDay, type CashierStat, type ItemStat, type OrderWithMeta } from '@/features/orders/orderRepo';
 import { listCashiers } from '@/features/auth/profileRepo';
 import { getSettings } from '@/features/settings/settingsRepo';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -46,6 +46,7 @@ export default function HistoryScreen() {
       hours: hourlyStats(filter),
       items: itemStats(filter),
       cashierList: listCashiers(profile?.id ?? null),
+      formerStaff: listOrderStaff(profile?.id ?? null).filter((s) => s.id !== profile?.id && !listCashiers(profile?.id ?? null).some((c) => c.id === s.id)),
       currency: getSettings().currency_symbol,
     };
   }, [state.period, cashierId, includeTest, showCancelled, profile?.id]);
@@ -147,6 +148,7 @@ export default function HistoryScreen() {
             { value: 'all', label: t('allCashiers') },
             ...(profile ? [{ value: profile.id, label: `${profile.name} (${t('roleAdmin')})` }] : []),
             ...data.cashierList.map((c) => ({ value: c.id, label: c.name })),
+            ...data.formerStaff.map((c) => ({ value: c.id, label: c.name })),
           ]} />
         <Toggle label={t('includeTest')} value={includeTest} onChange={setIncludeTest} />
         <Toggle label={t('showCancelled')} hint={t('showCancelledHint')} value={showCancelled} onChange={setShowCancelled} />

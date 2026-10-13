@@ -31,7 +31,8 @@ web/                 static public menu page (QR ordering)
 1. Copy `.env.example` to `.env` and fill in the Supabase URL, publishable key and hosted menu URL.
    The same three values live in each `eas.json` build profile's `env` block, which is what cloud builds use.
 2. Run `supabase/schema.sql` in the Supabase SQL Editor, then every file in `supabase/migrations/` in numeric order
-   (004 adds promotions, 005 locks down app releases for the update prompt, 006 adds order editing and cancelling).
+   (004 adds promotions, 005 locks down app releases for the update prompt, 006 adds order editing and cancelling,
+   007 adds live web orders, cashier names kept on orders and the release push).
    Both are safe to re-run. A migration that adds columns to synced tables must go live together with the app build
    that uses them; see "Rolling out a migration" below.
 3. In Supabase, Authentication -> URL Configuration -> Redirect URLs, add `lagmanhouse://**`.
@@ -131,7 +132,9 @@ the Expo APK link in the browser. When the file finishes, tap it and choose Upda
 build is signed with the same EAS keystore. "Later" hides the dialog for 6 hours. A mandatory release has no Later button.
 
 Only the owner can publish releases: the table has no client write access (migration 005). Releases are
-published automatically by an EAS build webhook.
+published automatically by an EAS build webhook. From migration 007, every new release row also sends a push
+notification ("Update available") to every phone that has the app and has allowed notifications; tapping it opens
+the update dialog.
 
 ### One-time setup
 
@@ -224,13 +227,33 @@ Uninstall the development client before installing a release APK; both use the p
 - iOS is not a build target. Budget thermal printers use Bluetooth Classic, which iOS does not allow third-party
   apps to use, and installing on iPhones needs an Apple Developer account.
 
+## Live web orders
+
+1. A customer orders from the QR menu. They get an order number (#1, #2, ... per restaurant per day) and a countdown.
+   The order is saved in their browser, so closing or reloading the page keeps tracking it.
+2. Every active cashier and the admin get a push notification. Tapping it opens that order in the app. While any web
+   order is open, a bar at the top of every app screen shows each one as a chip: order number, table, items and the
+   time left (green, then orange under 3 minutes, red under 1 minute).
+3. Anyone can **Accept** it. Only one person can: the first tap wins and every other phone sees "Accepted by Ali"
+   instantly through Supabase Realtime. The person who accepted it can change quantities, **Add items** from the
+   menu, apply a coupon, then **Complete order**, which creates the normal sale (stock, revenue, receipt).
+   **Release** puts it back for someone else; **Cancel** asks for a reason, which the customer sees.
+4. If nobody accepts within the response time, the order closes as "not accepted in time" on every phone and on the
+   customer's page. Set the time in Settings -> Web orders (default 10 minutes, 1 to 120).
+5. The customer's page updates by itself: waiting, accepted, then the confirmed receipt with items, sizes, discounts,
+   coupon, total, payment and time. If they allowed notifications, their phone is notified when the status changes
+   while the page is in the background.
+
+Admins can also handle web orders: drawer -> Web orders, or the bell on the New order screen.
+
 ## Public menu
 
 `web/` is a static site. Host it anywhere (see `web/README.md`) and set `EXPO_PUBLIC_PUBLIC_MENU_URL`
 to its URL. Each admin has a private menu code; the QR screen encodes `<URL>/?m=<code>`. Only that link
 allows ordering, and every order is validated and priced on the server against that admin's menu.
 Opening the URL without a code shows the admin marked as default, read-only. Regenerating the code
-invalidates old QR prints. Customers type their table number as a hint.
+invalidates old QR prints. Customers type their table number as a hint. Tapping an item opens its details with
+sizes and quantity. Redeploy the whole `web/` folder after updating; it now includes `sw.js` for order notifications.
 
 ## Key behaviours
 
@@ -257,6 +280,13 @@ invalidates old QR prints. Customers type their table number as a hint.
   before deleting them. Cancel, then sign in as the previous account while online to sync them first.
 - Email links (signup confirmation, password reset) are remembered once used, so reopening the app from Recents
   never replays an old link.
+- Reports never lose people or items: every sale stores the item names, sizes and prices, and from migration 007 the
+  cashier's name too, so deleting a menu item, deactivating a cashier or deleting an account keeps history, rankings
+  and filters intact.
+- Quick sign in remembers the last two accounts used on the phone (for example the admin and a cashier). A third
+  account replaces the oldest one. Each can be removed from the login screen.
+- Date fields open a calendar with Today and Yesterday shortcuts; validity windows also pick a time.
+- Screens keep their buttons above Android's on-screen navigation buttons when those are shown.
 - History and analytics run on local SQLite data: any single date or range, cashier ranking, busiest hours,
   item-wise and cashier-wise sortable tables, revenue charts, and CSV export through the Android share sheet.
 - Anonymous web visitors have no table access at all; they only call `public_menu`, `place_customer_order`

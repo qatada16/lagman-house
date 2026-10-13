@@ -10,6 +10,7 @@ const DEFAULTS: RestaurantSettings = {
   restaurant_address: '',
   currency_symbol: 'Rs',
   logo_url: '',
+  web_order_minutes: '10',
 };
 
 export function getSettings(tenantId: string | null = getTenantId()): RestaurantSettings {

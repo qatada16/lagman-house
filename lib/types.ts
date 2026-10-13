@@ -175,6 +175,7 @@ export interface Order {
   voided_by: string | null;
   void_reason: string | null;
   revision_id: string | null;
+  cashier_label?: string | null;
   is_test: boolean;
   stock_deducted: boolean;
   device_id: string | null;
@@ -222,10 +223,14 @@ export interface CustomerOrder {
   customer_name: string | null;
   items: CustomerOrderItem[];
   note: string | null;
-  status: 'pending' | 'claimed' | 'completed' | 'cancelled';
+  status: 'pending' | 'claimed' | 'completed' | 'cancelled' | 'expired';
   claimed_by: string | null;
   claimed_at: string | null;
+  claimed_by_name?: string | null;
   completed_order_id: string | null;
+  ticket_no?: number | null;
+  expires_at?: string | null;
+  cancel_reason?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -342,6 +347,7 @@ export interface RestaurantSettings {
   restaurant_address: string;
   currency_symbol: string;
   logo_url: string;
+  web_order_minutes: string;
 }
 
 export type ExpenseSource = 'manual' | 'stock';

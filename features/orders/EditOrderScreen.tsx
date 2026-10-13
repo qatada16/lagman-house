@@ -1,8 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { BackHandler, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppText, Button, Card, Divider, IconButton, Screen } from '@/components/ui';
+import { AppText, Button, Card, Divider, IconButton, Screen, useBottomInset, useTopInset } from '@/components/ui';
 import { MenuGrid } from '@/features/menu/MenuGrid';
 import { getCoupon } from '@/features/promos/promoRepo';
 import { computeTotals } from '@/features/promos/pricing';
@@ -55,7 +54,8 @@ function signature(s: { lines: CartLine[]; coupon: Coupon | null; paymentMethod:
 export function EditOrderScreen({ orderId, backPath, safeTop = true }: { orderId: string; backPath: string; safeTop?: boolean }) {
   const t = useT();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
+  const bottomInset = useBottomInset();
   const { row } = useLayout();
   const { width } = useWindowDimensions();
   const wide = width >= layout.wideBreakpoint;
@@ -236,7 +236,7 @@ export function EditOrderScreen({ orderId, backPath, safeTop = true }: { orderId
 
   return (
     <CartStoreContext.Provider value={store}>
-      <View style={[styles.root, { paddingTop: safeTop ? insets.top : 0 }]}>
+      <View style={[styles.root, { paddingTop: safeTop ? topInset : 0 }]}>
         {header}
         {lines.length === 0 ? (
           <AppText variant="small" color={colors.danger} style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
@@ -244,7 +244,7 @@ export function EditOrderScreen({ orderId, backPath, safeTop = true }: { orderId
           </AppText>
         ) : null}
         {wide ? (
-          <View style={[row, { flex: 1, gap: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }]}>
+          <View style={[row, { flex: 1, gap: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg + bottomInset }]}>
             <View style={{ flex: 1 }}>
               <MenuGrid availableWidth={width - 340 - spacing.lg * 3} />
             </View>
@@ -255,7 +255,7 @@ export function EditOrderScreen({ orderId, backPath, safeTop = true }: { orderId
             <View style={{ flex: 1, paddingHorizontal: spacing.lg }}>
               <MenuGrid />
             </View>
-            <View style={{ padding: spacing.md }}>{panel}</View>
+            <View style={{ padding: spacing.md, paddingBottom: spacing.md + bottomInset }}>{panel}</View>
           </>
         )}
       </View>

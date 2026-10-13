@@ -34,9 +34,9 @@ interface RowProps {
 export function ListRow({ title, subtitle, right, left, onPress, chevron, style }: RowProps) {
   const { row, isRTL } = useLayout();
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.row, row, pressed && onPress ? styles.pressed : null, style]}>
+    <Pressable onPress={onPress} disabled={!onPress} collapsable={false} style={({ pressed }) => [styles.row, row, pressed && onPress ? styles.pressed : null, style]}>
       {left}
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: 2 }} pointerEvents="none">
         <AppText weight="600">{title}</AppText>
         {subtitle ? <AppText variant="small">{subtitle}</AppText> : null}
       </View>
@@ -70,13 +70,13 @@ export function Stepper({ value, onChange, min = 1, max = 99 }: { value: number;
   const { row } = useLayout();
   return (
     <View style={[styles.stepper, row]}>
-      <Pressable onPress={() => onChange(Math.max(min, value - 1))} style={styles.stepBtn} hitSlop={6}>
+      <Pressable onPress={() => onChange(Math.max(min, value - 1))} style={styles.stepBtn} hitSlop={8} collapsable={false}>
         <Feather name="minus" size={16} color={colors.accentDark} />
       </Pressable>
       <AppText weight="600" align="center" style={{ minWidth: 28 }}>
         {value}
       </AppText>
-      <Pressable onPress={() => onChange(Math.min(max, value + 1))} style={styles.stepBtn} hitSlop={6}>
+      <Pressable onPress={() => onChange(Math.min(max, value + 1))} style={styles.stepBtn} hitSlop={8} collapsable={false}>
         <Feather name="plus" size={16} color={colors.accentDark} />
       </Pressable>
     </View>
@@ -101,8 +101,10 @@ export function SectionTitle({ title, right }: { title: string; right?: React.Re
 
 export function IconButton({ icon, onPress, color = colors.accentDark, size = 20, style }: { icon: keyof typeof Feather.glyphMap; onPress?: () => void; color?: string; size?: number; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.6 } : null, style]}>
-      <Feather name={icon} size={size} color={color} />
+    <Pressable onPress={onPress} hitSlop={10} collapsable={false} accessibilityRole="button" style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.6 } : null, style]}>
+      <View pointerEvents="none">
+        <Feather name={icon} size={size} color={color} />
+      </View>
     </Pressable>
   );
 }

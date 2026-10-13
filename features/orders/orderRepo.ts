@@ -24,7 +24,7 @@ const toOrder = (r: OrderRow & { cashier_name?: string | null }): OrderWithMeta 
   is_dirty: !!r.is_dirty,
 });
 
-const ORDER_SELECT = `SELECT o.*, p.name AS cashier_name, ep.name AS edited_by_name, vp.name AS voided_by_name
+const ORDER_SELECT = `SELECT o.*, COALESCE(p.name, o.cashier_label) AS cashier_name, ep.name AS edited_by_name, vp.name AS voided_by_name
   FROM orders o
   LEFT JOIN profiles p ON p.id = o.cashier_id
   LEFT JOIN profiles ep ON ep.id = o.edited_by
@@ -63,6 +63,7 @@ export function createOrder(input: CreateOrderInput): { order: Order; items: Ord
     customerOrderId: input.customerOrderId,
     coupon: input.coupon,
     deviceId: getDeviceId(),
+    cashierLabel: get<{ name: string }>('SELECT name FROM profiles WHERE id = ?', [input.cashierId])?.name ?? null,
     itemId: () => newId(),
   });
 
@@ -134,7 +135,7 @@ function whereFor(f: OrderFilter) {
 export function listOrders(f: OrderFilter, limit = 200): OrderWithMeta[] {
   const { where, params } = whereFor(f);
   return all<OrderRow & { cashier_name: string | null }>(
-    `SELECT o.*, p.name AS cashier_name FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
+    `SELECT o.*, COALESCE(p.name, o.cashier_label) AS cashier_name FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
      WHERE ${where} ORDER BY o.created_at DESC LIMIT ?`,
     [...params, limit]
   ).map(toOrder);
@@ -204,9 +205,9 @@ export interface CashierStat {
 export function cashierStats(f: OrderFilter): CashierStat[] {
   const { where, params } = whereFor(f);
   return all<CashierStat>(
-    `SELECT o.cashier_id, COALESCE(p.name, '-') AS name, COUNT(*) AS count, SUM(o.total) AS revenue, AVG(o.total) AS average
+    `SELECT o.cashier_id, COALESCE(MAX(p.name), MAX(o.cashier_label), '-') AS name, COUNT(*) AS count, SUM(o.total) AS revenue, AVG(o.total) AS average
      FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
-     WHERE ${where} GROUP BY o.cashier_id ORDER BY count DESC`,
+     WHERE ${where} GROUP BY COALESCE(o.cashier_id, o.cashier_label) ORDER BY count DESC`,
     params
   );
 }
@@ -244,6 +245,19 @@ export function itemStats(f: OrderFilter): ItemStat[] {
      WHERE ${where} AND oi.revision_id IS o.revision_id AND NOT (oi.parent_item_id IS NULL AND oi.deal_id IS NOT NULL)
      GROUP BY name ORDER BY quantity DESC`,
     params
+  );
+}
+
+export function findOrderByCustomerOrder(customerOrderId: string): { id: string; order_number: string } | null {
+  return get<{ id: string; order_number: string }>('SELECT id, order_number FROM orders WHERE customer_order_id = ? LIMIT 1', [customerOrderId]);
+}
+
+export function listOrderStaff(adminId: string | null): { id: string; name: string }[] {
+  return all<{ id: string; name: string }>(
+    `SELECT o.cashier_id AS id, COALESCE(MAX(p.name), MAX(o.cashier_label), '-') AS name
+     FROM orders o LEFT JOIN profiles p ON p.id = o.cashier_id
+     WHERE o.admin_id = ? AND o.cashier_id IS NOT NULL GROUP BY o.cashier_id ORDER BY name`,
+    [adminId ?? '']
   );
 }
 

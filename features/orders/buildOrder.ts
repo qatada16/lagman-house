@@ -16,6 +16,7 @@ export interface BuildOrderOptions {
   coupon: Coupon | null;
   deviceId?: string | null;
   revisionId?: string | null;
+  cashierLabel?: string | null;
   itemId?: (index: number, componentIndex?: number) => string;
 }
 
@@ -55,6 +56,7 @@ export function buildOrder(lines: CartLine[], opts: BuildOrderOptions): { order:
     voided_by: null,
     void_reason: null,
     revision_id: opts.revisionId ?? null,
+    cashier_label: opts.cashierLabel ?? null,
     is_test: opts.isTest,
     stock_deducted: false,
     device_id: opts.deviceId ?? null,

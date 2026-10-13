@@ -44,7 +44,7 @@ export function Select<T extends string>({ label, value, options, onChange, plac
           {label}
         </AppText>
       ) : null}
-      <Pressable
+      <Pressable collapsable={false}
         disabled={disabled}
         onPress={() => setOpen(true)}
         style={[styles.field, row, error ? { borderColor: colors.danger } : null, disabled ? styles.disabled : null]}
@@ -69,7 +69,7 @@ export function Select<T extends string>({ label, value, options, onChange, plac
           renderItem={({ item }) => {
             const active = item.value === value;
             return (
-              <Pressable
+              <Pressable collapsable={false}
                 onPress={() => {
                   onChange(item.value);
                   setOpen(false);

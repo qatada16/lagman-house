@@ -16,7 +16,9 @@ export default function AdminSettingsScreen() {
   const [settings, setSettings] = useState(getSettings);
 
   const save = () => {
-    saveSettings(settings);
+    const minutes = Math.min(120, Math.max(1, parseInt(settings.web_order_minutes, 10) || 10));
+    saveSettings({ ...settings, web_order_minutes: String(minutes) });
+    setSettings((s) => ({ ...s, web_order_minutes: String(minutes) }));
     toast.success(t('saved'));
   };
 
@@ -30,6 +32,17 @@ export default function AdminSettingsScreen() {
         <Input label={t('restaurantAddress')} value={settings.restaurant_address} onChangeText={(v) => setSettings((s) => ({ ...s, restaurant_address: v }))} multiline />
         <View style={{ height: spacing.sm }} />
         <Input label={t('currencySymbol')} value={settings.currency_symbol} onChangeText={(v) => setSettings((s) => ({ ...s, currency_symbol: v }))} maxLength={5} />
+        <Button title={t('save')} onPress={save} style={{ marginTop: spacing.md }} />
+      </Card>
+      <Card title={t('navWebOrders')}>
+        <Input
+          label={t('webOrderMinutes')}
+          value={settings.web_order_minutes}
+          onChangeText={(v) => setSettings((s) => ({ ...s, web_order_minutes: v }))}
+          digitsOnly
+          maxLength={3}
+          hint={t('webOrderMinutesHint')}
+        />
         <Button title={t('save')} onPress={save} style={{ marginTop: spacing.md }} />
       </Card>
       <Card title={t('language')}>

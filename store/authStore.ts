@@ -8,7 +8,7 @@ import { clearUserData, initDb, kvGet, kvSet } from '@/lib/db';
 import type { Profile } from '@/lib/types';
 import { cacheProfile, getCachedProfile, getCurrentUserId, setCurrentUserId } from '@/features/auth/profileRepo';
 import { abortSync, countPending, resetSyncState } from '@/features/sync/syncEngine';
-import { clearLocalSession, forgetRememberedAccount, getRememberedAccount, rememberAccount, revokeRefreshToken, updateRememberedToken } from '@/features/auth/rememberedAccount';
+import { clearLocalSession, forgetRememberedAccount, getRememberedAccounts, rememberAccount, revokeRefreshToken, updateRememberedToken } from '@/features/auth/rememberedAccount';
 import { useLanguageStore } from './languageStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
@@ -246,13 +246,13 @@ export const useAuthStore = create<AuthState>((set, getState) => ({
       await previous;
       supabase.auth.stopAutoRefresh();
       const stored = await readStoredSession();
-      const remembered = opts?.forget ? null : await getRememberedAccount();
-      if (remembered && remembered.id === userId) {
+      const remembered = opts?.forget || !userId ? null : (await getRememberedAccounts()).find((a) => a.id === userId) ?? null;
+      if (remembered) {
         if (stored?.refresh_token) await updateRememberedToken(remembered.id, stored.refresh_token);
         await clearLocalSession();
         return;
       }
-      if (opts?.forget) await forgetRememberedAccount(false);
+      if (opts?.forget && userId) await forgetRememberedAccount(userId, false);
       await discardStoredSession();
     })().catch(() => undefined);
   },

@@ -26,7 +26,7 @@ export function CashierTabBar() {
       {tabs.map((tab) => {
         const active = tab.match(pathname);
         return (
-          <Pressable key={tab.key} onPress={() => router.navigate(tab.href as never)} style={styles.tab}>
+          <Pressable collapsable={false} key={tab.key} onPress={() => router.navigate(tab.href as never)} style={styles.tab}>
             <Feather name={tab.icon} size={20} color={active ? colors.action : colors.surfaceMuted} />
             <AppText variant="label" color={active ? colors.action : colors.surfaceMuted} align="center">
               {t(tab.key)}

@@ -272,6 +272,7 @@ CREATE TABLE IF NOT EXISTS orders (
   voided_by TEXT,
   void_reason TEXT,
   revision_id TEXT,
+  cashier_label TEXT,
   is_test INTEGER NOT NULL DEFAULT 0,
   stock_deducted INTEGER NOT NULL DEFAULT 0,
   device_id TEXT,
@@ -355,6 +356,7 @@ const COLUMN_MIGRATIONS: [string, string, string][] = [
   ['orders', 'void_reason', 'TEXT'],
   ['orders', 'revision_id', 'TEXT'],
   ['order_items', 'revision_id', 'TEXT'],
+  ['orders', 'cashier_label', 'TEXT'],
 ];
 
 let initialized = false;

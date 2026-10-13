@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { Input, Segmented } from '@/components/ui';
+import { DateField, Segmented } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { spacing } from '@/constants/theme';
 import { daysAgo, formatDate, parseLocalDate, startOfDay } from '@/lib/format';
@@ -42,6 +42,7 @@ export function usePeriod(initial: Range = 'today') {
 export function PeriodPicker({ state }: { state: ReturnType<typeof usePeriod> }) {
   const t = useT();
   const { row } = useLayout();
+  const today = formatDate(new Date().toISOString());
   return (
     <View style={{ gap: spacing.sm }}>
       <Segmented<Range>
@@ -58,11 +59,11 @@ export function PeriodPicker({ state }: { state: ReturnType<typeof usePeriod> })
           { value: 'custom', label: t('rangeCustom') },
         ]}
       />
-      {state.range === 'date' ? <Input label={t('date')} value={state.dateText} onChangeText={state.setDateText} placeholder={t('dateFormatHint')} /> : null}
+      {state.range === 'date' ? <DateField label={t('date')} value={state.dateText} onChange={state.setDateText} maxDate={today} /> : null}
       {state.range === 'custom' ? (
         <View style={[row, { gap: spacing.sm }]}>
-          <Input label={t('from')} value={state.fromText} onChangeText={state.setFromText} placeholder={t('dateFormatHint')} containerStyle={{ flex: 1 }} />
-          <Input label={t('to')} value={state.toText} onChangeText={state.setToText} placeholder={t('dateFormatHint')} containerStyle={{ flex: 1 }} />
+          <DateField label={t('from')} value={state.fromText} onChange={state.setFromText} maxDate={state.toText || today} containerStyle={{ flex: 1 }} />
+          <DateField label={t('to')} value={state.toText} onChange={state.setToText} minDate={state.fromText} maxDate={today} containerStyle={{ flex: 1 }} />
         </View>
       ) : null}
     </View>

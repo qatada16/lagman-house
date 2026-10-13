@@ -348,6 +348,7 @@ export function makeSampleOrder(item: MenuItem | null, variant: MenuItemVariant 
     voided_by: null,
     void_reason: null,
     revision_id: null,
+    cashier_label: null,
     is_test: true,
     stock_deducted: false,
     device_id: null,

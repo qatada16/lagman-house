@@ -20,7 +20,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
       {items.map((o) => {
         const active = o.value === value;
         return (
-          <Pressable
+          <Pressable collapsable={false}
             key={o.value}
             onPress={() => onChange(o.value)}
             style={[styles.segment, scroll ? null : { flex: 1 }, active ? styles.active : null]}

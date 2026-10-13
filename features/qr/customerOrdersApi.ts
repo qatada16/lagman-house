@@ -2,7 +2,12 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { CustomerOrder } from '@/lib/types';
 
+export async function expireCustomerOrders() {
+  await supabase.rpc('expire_customer_orders');
+}
+
 export async function fetchOpenCustomerOrders(): Promise<CustomerOrder[]> {
+  await expireCustomerOrders().catch(() => undefined);
   const { data, error } = await supabase
     .from('customer_orders')
     .select('*')
@@ -12,7 +17,13 @@ export async function fetchOpenCustomerOrders(): Promise<CustomerOrder[]> {
   return (data ?? []) as CustomerOrder[];
 }
 
-// Atomic server-side claim; null means another cashier won.
+export async function fetchCustomerOrder(id: string): Promise<CustomerOrder | null> {
+  const { data, error } = await supabase.from('customer_orders').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return (data as CustomerOrder | null) ?? null;
+}
+
+// Atomic server-side claim; null means another staff member won or the timer ran out.
 export async function claimCustomerOrder(orderId: string, cashierId: string): Promise<CustomerOrder | null> {
   const { data, error } = await supabase.rpc('claim_customer_order', { p_order_id: orderId, p_cashier_id: cashierId });
   if (error) throw error;
@@ -30,8 +41,8 @@ export async function completeCustomerOrder(orderId: string, completedOrderId: s
   if (error) throw error;
 }
 
-export async function cancelCustomerOrder(orderId: string) {
-  const { error } = await supabase.rpc('cancel_customer_order', { p_order_id: orderId });
+export async function cancelCustomerOrder(orderId: string, reason: string) {
+  const { error } = await supabase.rpc('cancel_customer_order', { p_order_id: orderId, p_reason: reason });
   if (error) throw error;
 }
 
@@ -43,4 +54,9 @@ export function subscribeCustomerOrders(tenantId: string, onChange: (kind: 'INSE
       onChange(payload.eventType, row);
     })
     .subscribe();
+}
+
+export function secondsLeft(order: Pick<CustomerOrder, 'expires_at'>, now = Date.now()) {
+  if (!order.expires_at) return null;
+  return Math.floor((new Date(order.expires_at).getTime() - now) / 1000);
 }

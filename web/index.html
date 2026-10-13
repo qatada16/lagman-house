@@ -17,6 +17,7 @@
   </header>
 
   <main>
+    <button id="trackPill" class="trackpill hidden" type="button"></button>
     <section id="status" class="status hidden"></section>
     <nav id="categories" class="chips"></nav>
     <section id="menu" class="grid"></section>
@@ -68,11 +69,29 @@
     </div>
   </div>
 
-  <div id="done" class="done hidden">
-    <h2 data-i18n="sent">Order sent</h2>
-    <p data-i18n="sentBody">Please wait for the cashier to confirm your order.</p>
-    <p id="doneStatus" class="muted"></p>
-    <button id="againBtn" class="ghost" type="button" data-i18n="again">Start a new order</button>
+  <div id="itemSheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <span></span>
+        <button id="closeItem" class="ghost" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="itemBody" class="item-detail"></div>
+      <button id="itemAdd" class="primary wide" type="button"></button>
+    </div>
+  </div>
+
+  <div id="tracker" class="tracker hidden" data-status="pending">
+    <div class="tracker-inner">
+      <p class="muted small" data-i18n="orderNo">Your order number</p>
+      <div id="ticketNo" class="ticket"></div>
+      <p class="muted small" data-i18n="showStaff">Show this number at the counter if asked.</p>
+      <h2 id="trackTitle"></h2>
+      <p id="trackBody" class="muted"></p>
+      <div id="trackTimer" class="timer"></div>
+      <p id="trackReason" class="reason"></p>
+      <div id="trackReceipt" class="receipt hidden"></div>
+      <button id="againBtn" class="ghost wide" type="button" data-i18n="again">Start a new order</button>
+    </div>
   </div>
 
   <script src="./config.js"></script>

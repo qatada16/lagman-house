@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AppText, Badge, Button, Card, IconButton, Input, Screen, Segmented, Select } from '@/components/ui';
+import { AppText, Badge, Button, Card, IconButton, Input, Screen, Segmented, Select, DateField } from '@/components/ui';
 import { useLayout, useT } from '@/lib/i18n';
 import { colors, spacing } from '@/constants/theme';
 import { deleteExpense, EXPENSE_CATEGORIES, getExpense, saveExpense } from '@/features/expenses/expenseRepo';
@@ -89,7 +89,7 @@ export default function ExpenseEditScreen() {
         <View style={{ height: spacing.md }} />
         <Select label={t('expenseCategory')} value={category} onChange={setCategory} options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: t(categoryLabelKey(c)) }))} />
         <View style={{ height: spacing.md }} />
-        <Input label={t('expenseDate')} value={date} onChangeText={setDate} placeholder={t('dateFormatHint')} error={errors.date} />
+        <DateField label={t('expenseDate')} value={date} onChange={setDate} error={errors.date} />
         <View style={{ height: spacing.md }} />
         <Input label={t('notes')} value={note} onChangeText={setNote} multiline />
         <AppText variant="small" color={kind === 'outflow' ? colors.danger : colors.success} style={{ marginTop: spacing.sm }}>

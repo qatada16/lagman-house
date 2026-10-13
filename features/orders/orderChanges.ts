@@ -97,6 +97,7 @@ export function editOrder(input: EditOrderInput): { order: Order; items: OrderIt
     coupon: input.coupon,
     deviceId: current.device_id,
     revisionId: newId(),
+    cashierLabel: current.cashier_label ?? null,
     itemId: () => newId(),
   });
   const order: Order = {

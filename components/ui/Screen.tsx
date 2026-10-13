@@ -1,6 +1,6 @@
 import React from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomInset, useTopInset } from './insets';
 import { colors, layout, spacing } from '@/constants/theme';
 import { useLayout } from '@/lib/i18n';
 import { AppText } from './AppText';
@@ -19,7 +19,8 @@ interface Props {
 }
 
 export function Screen({ title, subtitle, actions, children, scroll = true, padded = true, style, contentStyle, safeTop = true, footer }: Props) {
-  const insets = useSafeAreaInsets();
+  const top = useTopInset();
+  const bottom = useBottomInset();
   const { row } = useLayout();
   const header =
     title || actions ? (
@@ -42,19 +43,19 @@ export function Screen({ title, subtitle, actions, children, scroll = true, padd
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.root, { paddingTop: safeTop ? insets.top : 0 }, style]}
+      style={[styles.root, { paddingTop: safeTop ? top : 0 }, style]}
     >
       {scroll ? (
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[padded ? styles.padded : null, styles.content, contentStyle]}
+          contentContainerStyle={[padded ? styles.padded : null, styles.content, footer ? null : { paddingBottom: spacing.xxl + bottom }, contentStyle]}
         >
           {inner}
         </ScrollView>
       ) : (
-        <View style={[{ flex: 1 }, padded ? styles.padded : null, contentStyle]}>{inner}</View>
+        <View style={[{ flex: 1 }, padded ? styles.padded : null, footer ? null : { paddingBottom: (padded ? spacing.lg : 0) + bottom }, contentStyle]}>{inner}</View>
       )}
-      {footer ? <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>{footer}</View> : null}
+      {footer ? <View style={[styles.footer, { paddingBottom: spacing.md + bottom }]}>{footer}</View> : null}
     </KeyboardAvoidingView>
   );
 }

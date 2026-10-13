@@ -1,6 +1,7 @@
 import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useLayout } from '@/lib/i18n';
 import { AppText } from './AppText';
@@ -16,14 +17,15 @@ interface Props {
 
 export function Sheet({ visible, onClose, title, children, scroll = true, footer }: Props) {
   const { row } = useLayout();
+  const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap} pointerEvents="box-none">
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: spacing.lg + insets.bottom, maxHeight: '90%', marginTop: insets.top + spacing.lg }]}>
           <View style={[styles.header, row]}>
             <AppText variant="heading">{title ?? ''}</AppText>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Pressable onPress={onClose} hitSlop={14} accessibilityRole="button">
               <Feather name="x" size={22} color={colors.surfaceMuted} />
             </Pressable>
           </View>
@@ -48,8 +50,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    maxHeight: '90%',
-    paddingBottom: spacing.xl,
   },
   header: {
     justifyContent: 'space-between',

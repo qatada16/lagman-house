@@ -46,6 +46,12 @@ export function isSafeDownloadUrl(url: string | null | undefined): url is string
 
 const releaseKey = (r: AppRelease) => `${r.version}+${r.build_number}`;
 let snoozed: { key: string; until: number } | null = null;
+const checkRequests = new Set<() => void>();
+
+export function requestUpdateCheck() {
+  snoozed = null;
+  checkRequests.forEach((fn) => fn());
+}
 
 export function useUpdateCheck() {
   const [release, setRelease] = useState<AppRelease | null>(null);
@@ -80,7 +86,12 @@ export function useUpdateCheck() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && Date.now() - lastCheck.current >= RECHECK_MS) void check();
     });
-    return () => sub.remove();
+    const request = () => void check();
+    checkRequests.add(request);
+    return () => {
+      sub.remove();
+      checkRequests.delete(request);
+    };
   }, [check]);
 
   useEffect(() => {

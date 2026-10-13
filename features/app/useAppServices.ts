@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import NetInfo from '@react-native-community/netinfo';
@@ -7,13 +7,16 @@ import { usePrinterStore } from '@/store/printerStore';
 import { useCustomerOrderStore } from '@/store/customerOrderStore';
 import { startSyncScheduler, stopSyncScheduler } from '@/features/sync/scheduler';
 import { runSync } from '@/features/sync/syncEngine';
-import { addNotificationListeners, registerForPush } from '@/features/notifications/push';
+import { addNotificationListeners, consumeLaunchResponse, registerForPush, type PushData } from '@/features/notifications/push';
 import { toast } from '@/store/toastStore';
 import { translate } from '@/lib/i18n';
 import { isResetUrl, sessionFromUrl } from '@/features/auth/authApi';
 import { beginRecovery } from '@/features/auth/recovery';
 import { useLanguageStore } from '@/store/languageStore';
 import { useSyncStore } from '@/store/syncStore';
+import { requestUpdateCheck } from '@/features/app/useUpdateCheck';
+
+let launchHandled = false;
 
 // Starts background services once the user is signed in; tears them down on sign-out.
 export function useAppServices() {
@@ -62,9 +65,33 @@ export function useAppServices() {
       registeredFor.current = profile.id;
       void registerForPush(profile.id, profile.push_token);
     }
-    if (profile.role === 'cashier' && profile.status === 'active' && profile.admin_id) void useCustomerOrderStore.getState().start(profile.admin_id);
+    const tenant = profile.role === 'admin' ? profile.id : profile.admin_id;
+    if (profile.status === 'active' && tenant) void useCustomerOrderStore.getState().start(tenant);
     else useCustomerOrderStore.getState().stop();
   }, [status, profile?.id, profile?.role, profile?.status]);
+
+  const handleResponse = useCallback(
+    (data: PushData) => {
+      const p = useAuthStore.getState().profile;
+      if (!p) return;
+      if (data.type === 'cashier_request' && p.role === 'admin') router.push('/(admin)/cashiers');
+      if (data.type === 'customer_order' && p.status === 'active') {
+        const base = p.role === 'admin' ? '/(admin)/queue' : '/(cashier)/queue';
+        router.push((data.id ? `${base}/${data.id}` : base) as never);
+      }
+      if (data.type === 'order_change' && p.role === 'admin') router.push('/(admin)/orders');
+      if (data.type === 'app_update') requestUpdateCheck();
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    if (status !== 'signedIn' || !profile || launchHandled) return;
+    launchHandled = true;
+    void consumeLaunchResponse().then((data) => {
+      if (data) setTimeout(() => handleResponse(data), 400);
+    });
+  }, [status, profile, handleResponse]);
 
   useEffect(() => {
     return addNotificationListeners({
@@ -74,15 +101,11 @@ export function useAppServices() {
         if (data.type === 'cashier_request') void runSync('push');
         if (data.type === 'status_change') void useAuthStore.getState().refreshProfile();
         if (data.type === 'order_change') void runSync('push');
+        if (data.type === 'app_update') requestUpdateCheck();
+        if (data.type === 'customer_order') return;
         toast.info(title && body ? `${title}: ${body}` : title ?? body ?? translate(lang, 'success'));
       },
-      onResponse: (data) => {
-        const p = useAuthStore.getState().profile;
-        if (!p) return;
-        if (data.type === 'cashier_request' && p.role === 'admin') router.push('/(admin)/cashiers');
-        if (data.type === 'customer_order' && p.role === 'cashier') router.push('/(cashier)/queue');
-        if (data.type === 'order_change' && p.role === 'admin') router.push('/(admin)/orders');
-      },
+      onResponse: handleResponse,
     });
-  }, [router]);
+  }, [handleResponse]);
 }

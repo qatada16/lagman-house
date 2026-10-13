@@ -94,7 +94,7 @@ export function DealPickerSheet({ deal, currency, onClose, onAdd }: { deal: Deal
                 if (!item) return null;
                 const active = sel?.menu_item_id === o.menu_item_id;
                 return (
-                  <Pressable
+                  <Pressable collapsable={false}
                     key={o.menu_item_id}
                     onPress={() => {
                       const vid = o.variant_id ?? (item.has_variants ? listVariants(item.id)[0]?.id ?? null : null);
@@ -118,7 +118,7 @@ export function DealPickerSheet({ deal, currency, onClose, onAdd }: { deal: Deal
                   variants.map((v) => {
                     const active = sel?.variant_id === v.id;
                     return (
-                      <Pressable key={v.id} onPress={() => setSelection((s) => ({ ...s, [slot.id]: { menu_item_id: selectedItem.id, variant_id: v.id } }))} style={[styles.sizeChip, active ? styles.sizeChipActive : null]}>
+                      <Pressable collapsable={false} key={v.id} onPress={() => setSelection((s) => ({ ...s, [slot.id]: { menu_item_id: selectedItem.id, variant_id: v.id } }))} style={[styles.sizeChip, active ? styles.sizeChipActive : null]}>
                         <AppText variant="small" weight="600" color={active ? colors.white : colors.action}>
                           {v.name}
                         </AppText>

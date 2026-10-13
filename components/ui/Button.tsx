@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useLayout } from '@/lib/i18n';
@@ -39,24 +39,30 @@ export function Button({ title, onPress, variant = 'primary', size = 'md', disab
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      hitSlop={6}
+      collapsable={false}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      android_ripple={{ color: 'rgba(0,0,0,0.12)' }}
       style={({ pressed }) => [
         styles.base,
-        row,
         { backgroundColor: p.bg, borderColor: p.border, height: heights[size], opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1 },
         fullWidth ? { alignSelf: 'stretch' } : null,
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={p.fg} size="small" />
-      ) : (
-        <>
-          {icon ? <Feather name={icon} size={size === 'sm' ? 14 : 17} color={p.fg} /> : null}
-          <AppText variant={size === 'sm' ? 'small' : 'subheading'} color={p.fg} align="center" weight="600">
-            {title}
-          </AppText>
-        </>
-      )}
+      <View pointerEvents="none" style={[styles.content, row]}>
+        {loading ? (
+          <ActivityIndicator color={p.fg} size="small" />
+        ) : (
+          <>
+            {icon ? <Feather name={icon} size={size === 'sm' ? 14 : 17} color={p.fg} /> : null}
+            <AppText variant={size === 'sm' ? 'small' : 'subheading'} color={p.fg} align="center" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {title}
+            </AppText>
+          </>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -65,9 +71,10 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,
+    overflow: 'hidden',
   },
+  content: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, alignSelf: 'stretch', flexGrow: 1 },
 });

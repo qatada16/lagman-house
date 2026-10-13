@@ -2,8 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppText } from '@/components/ui';
+import { AppText, useBottomInset, useTopInset } from '@/components/ui';
 import { PrinterDot, SyncIndicator } from '@/components/Indicators';
 import { MenuGrid } from '@/features/menu/MenuGrid';
 import { useLayout, useT } from '@/lib/i18n';
@@ -23,7 +22,8 @@ interface Props {
 export function PosScreen({ title, cartPath, printerPath, queuePath, safeTop = true }: Props) {
   const t = useT();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
+  const bottomInset = useBottomInset();
   const { row } = useLayout();
   const { width } = useWindowDimensions();
   const wide = width >= layout.wideBreakpoint;
@@ -56,14 +56,14 @@ export function PosScreen({ title, cartPath, printerPath, queuePath, safeTop = t
     </View>
   );
 
-  const paddingTop = safeTop ? insets.top : 0;
+  const paddingTop = safeTop ? topInset : 0;
 
   if (wide) {
     const cartWidth = 340;
     return (
       <View style={[styles.root, { paddingTop }]}>
         {header}
-        <View style={[row, { flex: 1, gap: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }]}>
+        <View style={[row, { flex: 1, gap: spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg + bottomInset }]}>
           <View style={{ flex: 1 }}>
             <MenuGrid availableWidth={width - cartWidth - spacing.lg * 3} />
           </View>
@@ -81,7 +81,7 @@ export function PosScreen({ title, cartPath, printerPath, queuePath, safeTop = t
       <View style={{ flex: 1, paddingHorizontal: spacing.lg }}>
         <MenuGrid />
       </View>
-      <View style={{ padding: spacing.md }}>
+      <View style={{ padding: spacing.md, paddingBottom: spacing.md + bottomInset }}>
         <CartPanel compact onProceed={() => go(cartPath)} />
       </View>
     </View>

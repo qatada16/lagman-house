@@ -99,7 +99,7 @@ export function MenuGrid({ availableWidth }: { availableWidth?: number }) {
     if (tile.kind === 'deal') {
       const d = tile.deal;
       return (
-        <Pressable onPress={() => setPickingDeal(d)} style={({ pressed }) => [styles.card, styles.dealCard, pressed ? styles.pressed : null]}>
+        <Pressable collapsable={false} onPress={() => setPickingDeal(d)} style={({ pressed }) => [styles.card, styles.dealCard, pressed ? styles.pressed : null]}>
           {d.image_url ? (
             <Image source={{ uri: d.image_url }} style={styles.image} contentFit="cover" />
           ) : (
@@ -123,7 +123,7 @@ export function MenuGrid({ availableWidth }: { availableWidth?: number }) {
     }
     const item = tile.item;
     return (
-      <Pressable onPress={() => tap(item)} style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}>
+      <Pressable collapsable={false} onPress={() => tap(item)} style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}>
         {item.image_url ? (
           <Image source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
         ) : (

@@ -15,7 +15,7 @@ interface Props {
 export function Toggle({ label, hint, value, onChange, disabled }: Props) {
   const { row } = useLayout();
   return (
-    <Pressable onPress={() => !disabled && onChange(!value)} style={[styles.row, row, disabled ? { opacity: 0.5 } : null]}>
+    <Pressable collapsable={false} onPress={() => !disabled && onChange(!value)} style={[styles.row, row, disabled ? { opacity: 0.5 } : null]}>
       <View style={{ flex: 1 }}>
         <AppText>{label}</AppText>
         {hint ? <AppText variant="small">{hint}</AppText> : null}

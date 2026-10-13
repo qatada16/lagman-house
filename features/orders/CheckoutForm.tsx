@@ -104,7 +104,7 @@ export function CheckoutForm({
             {active.length > 0 ? (
               <View style={[row, { gap: spacing.xs, flexWrap: 'wrap' }]}>
                 {active.map((c) => (
-                  <Pressable key={c.id} onPress={() => tryApply(c)} style={styles.chip}>
+                  <Pressable collapsable={false} key={c.id} onPress={() => tryApply(c)} style={styles.chip}>
                     <AppText variant="small" weight="600" color={colors.accentDark}>
                       {c.code}
                     </AppText>

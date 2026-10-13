@@ -37,13 +37,11 @@ export function Button({ title, onPress, variant = 'primary', size = 'md', disab
   const isDisabled = disabled || loading;
   return (
     <Pressable
-      onPress={onPress}
-      disabled={isDisabled}
+      onPress={isDisabled ? undefined : onPress}
       hitSlop={6}
-      collapsable={false}
       accessibilityRole="button"
       accessibilityLabel={title}
-      android_ripple={{ color: 'rgba(0,0,0,0.12)' }}
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
       style={({ pressed }) => [
         styles.base,
         { backgroundColor: p.bg, borderColor: p.border, height: heights[size], opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1 },
